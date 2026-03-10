@@ -1,0 +1,33 @@
+# Python虚拟环境
+venv/
+env/
+ENV/
+.venv/
+.env
+pipenv
+Pipenv.lock
+
+# Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 数据文件（可选）
+*.npy
+*.csv
