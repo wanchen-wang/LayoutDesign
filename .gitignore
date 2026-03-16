@@ -28,6 +28,6 @@ build/
 # Jupyter
 .ipynb_checkpoints/
 
-# 数据文件（可选）
 *.npy
 *.csv
+*.xlsx
