@@ -50,8 +50,32 @@ def run_single(data_dir):
     x_init = x_g_meet + Cp * t_meet
     y_center = 0.0
 
-    start_time = max(0, t_meet - 1500)
-    end_time = t_meet + 1500
+    # ==========================================
+    # 4. 生成时间序列并执行纯净虚拟采样
+    # ==========================================
+    # 从 params.json 中提取波宽尺度 D 和 相速度 Cp
+    D = params.get('D', 1000.0)  # 容错获取 D 
+
+    # 提取滑翔机水平速度
+    v_g = 0.22
+
+    # 动态计算自适应时间窗口 (迎头相遇)
+    V_rel = Cp + v_g  
+
+    # 【核心修改】：KdV/DJL 波形在距离核心 5 倍 D 处能量几乎衰减殆尽 (sech^2(5) < 0.0001)
+    # 我们需要确保时间窗口足以覆盖波浪到达前的 5D 和离开后的 5D
+    half_window_time = (5.0 * D) / V_rel
+
+    # 增加一个保底时间，确保即使是非常窄的波，也能有足够的环境背景 (比如至少 2000 秒)
+    half_window_time = max(2000.0, half_window_time)
+
+    # 自适应时间窗口：以相遇时间为中心，前后各取 half_window_time
+    start_time = max(0, t_meet - half_window_time)
+    end_time = t_meet + half_window_time
+
+    # 打印日志以供追踪
+    print(f"自适应时间窗口已设定: 半窗长 {half_window_time:.1f} 秒 (依据 5D={5*D:.1f}m, V_rel={V_rel:.2f}m/s)")
+
     t_array = np.arange(start_time, end_time, 5)
 
     w_obs = np.zeros_like(t_array, dtype=float)
