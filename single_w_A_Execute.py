@@ -30,7 +30,7 @@ def list_groups(base_dir="v_wave_data"):
     return items
 
 
-def execute_range(start_idx=1, end_idx=1, base_dir="v_wave_data", output_file="analysis_results_swA.xlsx"):
+def execute_range(start_idx=1, end_idx=1, base_dir="v_wave_data", output_file="analysis_results_swA_1.csv"):
     groups = list_groups(base_dir)
     n = len(groups)
     if n == 0:
@@ -47,10 +47,10 @@ def execute_range(start_idx=1, end_idx=1, base_dir="v_wave_data", output_file="a
     # Load existing results if file exists
     if os.path.exists(output_file):
         try:
-            df_existing = pd.read_excel(output_file)
+            df_existing = pd.read_csv(output_file)
             existing_groups = set(df_existing['group'].tolist())
         except Exception as e:
-            print(f"读取现有 Excel 文件失败: {e}")
+            print(f"读取现有 CSV 文件失败: {e}")
             existing_groups = set()
     else:
         existing_groups = set()
@@ -82,7 +82,7 @@ def execute_range(start_idx=1, end_idx=1, base_dir="v_wave_data", output_file="a
         else:
             df_combined = df_new
         
-        df_combined.to_excel(output_file, index=False)
+        df_combined.to_csv(output_file, index=False)
         print(f"\n结果已保存到 {output_file}")
     else:
         print("没有新的结果需要保存")

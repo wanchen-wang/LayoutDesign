@@ -6,7 +6,7 @@ from scipy.stats import pearsonr
 # ==========================================
 # 1. 数据加载与预处理
 # ==========================================
-file_path = 'analysis_results_swA.CSV'
+file_path = 'analysis_results_swA_1.csv'
 print(f"正在加载数据: {file_path} ...")
 df = pd.read_csv(file_path)
 

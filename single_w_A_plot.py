@@ -52,7 +52,33 @@ def plot_anatomy_fig3(t_array, w_obs, depth_obs, t_meet, thermocline_depth):
     plt.show()
 
 
-def list_groups(base_dir="v_wave_data"):
+def plot_lagrangian_sampling(t_array, w_isw_array, w_obs_array, depth_obs, t_integral, w_integral, dh_raw, error_pct):
+    """
+    可视化拉格朗日采样：水速曲线和滑翔机深度轨迹
+    """
+    plt.figure(figsize=(12, 6))
+    
+    # 绘制水速曲线
+    ax1 = plt.gca()
+    ax1.plot(t_array, w_isw_array, color='#005b96', label='Water Velocity $w_{isw}$', linewidth=2)
+    ax1.fill_between(t_integral, 0, w_integral, color='#f4a1c1', alpha=0.6, label=f'Integrated Area (dh_raw={dh_raw:.1f}m)')
+    ax1.set_xlabel('Time (s)')
+    ax1.set_ylabel('Water Vertical Velocity (m/s)', color='#005b96')
+    ax1.tick_params(axis='y', labelcolor='#005b96')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend(loc='upper left')
+
+    # 双 Y 轴绘制滑翔机拉格朗日深度轨迹
+    ax2 = ax1.twinx()
+    ax2.plot(t_array, depth_obs, color='darkorange', label="Glider True Depth $z_g$", linewidth=2, linestyle='--')
+    ax2.set_ylabel('Depth (m, Down is positive)', color='darkorange')
+    ax2.tick_params(axis='y', labelcolor='darkorange')
+    ax2.invert_yaxis() # 海洋学习惯：越深 Y 值越大，方向向下
+    ax2.legend(loc='upper right')
+
+    plt.title(f'Lagrangian Sampling Diagnosis (Error: {error_pct:.2f}%)')
+    plt.tight_layout()
+    plt.show()
     if not os.path.isdir(base_dir):
         return []
     items = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
