@@ -1,15 +1,18 @@
 """
-Batch executor for single_w_A analysis over multiple data groups.
+Batch executor for analysis over multiple data groups.
 
-Allows selection of start/end folder indices from the `v_wave_data`
-directory. Folders are assumed to be lexicographically ordered
-timestamps. Default behavior runs only the first folder.
+Allows selection of analysis method and start/end folder indices from the `v_wave_data`
+directory. Folders are assumed to be lexicographically ordered timestamps.
 
 Usage:
-    python Execute_single_w_A.py            # prompt for start/end or use defaults
-    python Execute_single_w_A.py 2 5       # run analyses for groups 2 through 5
+    python single_w_A_Execute.py            # interactive prompt for method and range
+    python single_w_A_Execute.py 2 5       # run analyses for groups 2-5 (prompts for method)
 
 Indices are 1-based.
+Available methods:
+    1: single_w_A
+    2: single_w_A_lagrangian
+    3: single_w_A_lagrangian_5cut
 """
 
 import os
@@ -19,7 +22,9 @@ import pandas as pd
 # ensure current directory is on path so that we can import local modules
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from single_w_A import run_single
+from single_w_A import run_single as run_single_swA
+from single_w_A_lagrangian import run_single as run_single_lagrangian
+from single_w_A_lagrangian_5cut import run_single as run_single_5cut
 
 
 def list_groups(base_dir="v_wave_data"):
@@ -30,7 +35,34 @@ def list_groups(base_dir="v_wave_data"):
     return items
 
 
-def execute_range(start_idx=1, end_idx=1, base_dir="v_wave_data", output_file="analysis_results_swA_1.csv"):
+def execute_range(start_idx=1, end_idx=1, method='single_w_A', base_dir="v_wave_data", output_file=None):
+    """
+    Execute batch analysis over a range of data groups.
+    
+    Parameters
+    ----------
+    start_idx : int
+        Starting group index (1-based)
+    end_idx : int
+        Ending group index (1-based)
+    method : str
+        Analysis method: 'single_w_A', 'single_w_A_lagrangian', or 'single_w_A_lagrangian_5cut'
+    base_dir : str
+        Base directory containing data groups
+    output_file : str, optional
+        Output CSV file path. If None, auto-generated based on method.
+    """
+    # Auto-generate output filename if not provided
+    if output_file is None:
+        if method == 'single_w_A':
+            output_file = "analysis_results_swA.csv"
+        elif method == 'single_w_A_lagrangian':
+            output_file = "analysis_results_swA_lagrangian.csv"
+        elif method == 'single_w_A_lagrangian_5cut':
+            output_file = "analysis_results_swA_lagrangian_5cut.csv"
+        else:
+            output_file = f"analysis_results_{method}.csv"
+    
     groups = list_groups(base_dir)
     n = len(groups)
     if n == 0:
@@ -45,6 +77,7 @@ def execute_range(start_idx=1, end_idx=1, base_dir="v_wave_data", output_file="a
         return
 
     # Load existing results if file exists
+    df_existing = None
     if os.path.exists(output_file):
         try:
             df_existing = pd.read_csv(output_file)
@@ -63,21 +96,34 @@ def execute_range(start_idx=1, end_idx=1, base_dir="v_wave_data", output_file="a
             print(f"组 {group} 已经分析过，跳过")
             continue
         path = os.path.join(base_dir, group)
-        print(f"\n*** 运行组 {idx}/{n}: {group} ***")
+        print(f"\n*** 运行组 {idx}/{n}: {group} (方法: {method}) ***")
         try:
-            result = run_single(path)
+            # 根据方法调用对应的分析函数
+            if method == 'single_w_A':
+                result = run_single_swA(path)
+            elif method == 'single_w_A_lagrangian':
+                result = run_single_lagrangian(path)
+            elif method == 'single_w_A_lagrangian_5cut':
+                result = run_single_5cut(path)
+            else:
+                raise ValueError(f"未知方法: {method}")
+            
             result['group'] = group
             results.append(result)
         except Exception as e:
             print(f"组 {group} 处理失败: {e}")
+            import traceback
+            traceback.print_exc()
 
     if results:
         df_new = pd.DataFrame(results)
-        # Reorder columns for better readability
-        columns = ['group', 'dh', 'true_h0', 'error_pct', 't_w0', 't_U']
-        df_new = df_new[columns]
+        # Only keep specified columns
+        columns_to_save = ['group', 'dh', 'true_h0', 'error_pct', 't_w0', 't_U']
+        # Only include columns that exist
+        columns_to_save = [col for col in columns_to_save if col in df_new.columns]
+        df_new = df_new[columns_to_save]
         
-        if os.path.exists(output_file):
+        if df_existing is not None:
             df_combined = pd.concat([df_existing, df_new], ignore_index=True)
         else:
             df_combined = df_new
@@ -96,13 +142,39 @@ if __name__ == "__main__":
         print("没有可用的数据组，请先运行 v_wave 生成数据")
         sys.exit(1)
 
-    # parse command-line args
+    # 可用的分析方法
+    methods = ['single_w_A', 'single_w_A_lagrangian', 'single_w_A_lagrangian_5cut']
+    
+    # 选择分析方法
+    print("\n可用的分析方法:")
+    for i, m in enumerate(methods, 1):
+        print(f"{i}: {m}")
+    
+    method = 'single_w_A'
+    while True:
+        try:
+            method_inp = input(f"\n请选择分析方法 (1-{len(methods)}) [1]: ").strip()
+            if not method_inp:
+                method = methods[0]
+                break
+            method_idx = int(method_inp) - 1
+            if 0 <= method_idx < len(methods):
+                method = methods[method_idx]
+                break
+            else:
+                print(f"请输入 1-{len(methods)} 之间的数字")
+        except ValueError:
+            print("请输入有效的整数")
+    
+    print(f"已选择方法: {method}\n")
+
+    # parse command-line args for start/end indices
     if len(sys.argv) >= 3:
         try:
             s = int(sys.argv[1])
             e = int(sys.argv[2])
         except ValueError:
-            print("参数必须为整数，格式: start end")
+            print("参数必须为整数，格式: python single_w_A_Execute.py start end")
             sys.exit(1)
     else:
         # interactive prompt with defaults
@@ -115,4 +187,4 @@ if __name__ == "__main__":
         if inp.strip():
             e = int(inp)
 
-    execute_range(s, e)
+    execute_range(s, e, method=method)

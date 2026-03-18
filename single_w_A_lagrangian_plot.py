@@ -11,8 +11,7 @@ import sys
 # ensure current directory is on path so that we can import local modules
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
-from single_w_A import run_single
-
+from single_w_A_lagrangian import run_single
 
 def plot_anatomy_fig3(t_array, w_obs, depth_obs, t_meet, thermocline_depth):
     """
@@ -93,8 +92,7 @@ def list_groups(base_dir="v_wave_data"):
 
 
 if __name__ == "__main__":
-    base_dir = "v_wave_data"
-    groups = list_groups(base_dir)
+    groups = list_groups()
     total = len(groups)
 
     if total == 0:
@@ -118,7 +116,7 @@ if __name__ == "__main__":
             print("请输入有效的数字")
 
     selected_group = groups[idx]
-    path = os.path.join(base_dir, selected_group)
+    path = os.path.join("v_wave_data", selected_group)
     print(f"正在分析数据组: {selected_group}")
 
     try:
@@ -126,7 +124,7 @@ if __name__ == "__main__":
         # 调用绘图函数
         plot_anatomy_fig3(
             result['t_array'],
-            result['w_obs'],
+            result['w_isw_array'],
             result['depth_obs'],
             result['t_meet'],
             result['thermocline_depth']
