@@ -1,8 +1,3 @@
-"""
-single_w_A.py 绘图模块
-提取所有可视化函数和绘图代码
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
 import os

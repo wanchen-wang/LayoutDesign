@@ -124,6 +124,8 @@ def run_single(data_dir):
     
     error_abs = abs(h0_corrected - true_h0)
     error_pct = error_abs / true_h0 * 100
+    duration = t_U - t_w0
+    error_density = error_pct / duration if duration > 0 else 0.0
 
     print(f"积分区间锁定: 从 {t_w0:.1f} s 到 {t_U:.1f} s")
     print(f"提取的有效向上水流数据点数: {len(w_integral)} 个")
@@ -137,6 +139,9 @@ def run_single(data_dir):
         'dh': h0_corrected,
         'true_h0': true_h0,
         'error_pct': error_pct,
+        'abs_error': error_abs,
+        'duration': duration,
+        'error_density': error_density,
         'params': params,
         't_w0': t_w0,
         't_U': t_U,

@@ -77,7 +77,9 @@ def execute_range(start_idx=1, end_idx=1, method='single_w_A', base_dir="D:\\PYT
     if os.path.exists(output_file):
         try:
             df_existing = pd.read_csv(output_file)
-            existing_groups = set(df_existing['group'].tolist())
+            # Handle both 'group' and 'wave_id' column names
+            id_col = 'wave_id' if 'wave_id' in df_existing.columns else 'group'
+            existing_groups = set(df_existing[id_col].tolist())
         except Exception as e:
             print(f"读取现有 CSV 文件失败: {e}")
             existing_groups = set()
@@ -111,8 +113,11 @@ def execute_range(start_idx=1, end_idx=1, method='single_w_A', base_dir="D:\\PYT
 
     if results:
         df_new = pd.DataFrame(results)
+        # Rename 'group' to 'wave_id' if it exists
+        if 'group' in df_new.columns:
+            df_new = df_new.rename(columns={'group': 'wave_id'})
         # Only keep specified columns
-        columns_to_save = ['group', 'dh', 'true_h0', 'error_pct', 't_w0', 't_U']
+        columns_to_save = ['wave_id', 't_w0', 't_U', 'duration', 'dh_raw', 'dh', 'true_h0', 'abs_error', 'error_pct', 'error_density']
         # Only include columns that exist
         columns_to_save = [col for col in columns_to_save if col in df_new.columns]
         df_new = df_new[columns_to_save]
