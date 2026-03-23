@@ -4,9 +4,35 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 
-def batch_process_multiple_thresholds(base_data_dir="D:\\PYTHON\\layout design\\V_Wave_Data"):
+
+def _normalize_threshold_list(cut_percentages=None, min_pct=1, max_pct=40):
+    """Build and validate threshold list in integer percent."""
+    if cut_percentages is not None:
+        values = sorted({int(v) for v in cut_percentages})
+    else:
+        values = list(range(int(min_pct), int(max_pct) + 1))
+
+    values = [v for v in values if 0 <= v <= 40]
+    if not values:
+        raise ValueError("没有有效的截断百分比，请输入 0-40 之间的整数。")
+    return values
+
+
+def batch_process_multiple_thresholds(
+    base_data_dir="D:\\PYTHON\\layout design\\V_Wave_Data",
+    cut_percentages=None,
+    min_pct=1,
+    max_pct=40,
+):
+    threshold_list = _normalize_threshold_list(
+        cut_percentages=cut_percentages, min_pct=min_pct, max_pct=max_pct
+    )
+
     print(f"\n{'='*60}")
-    print(f"🚀 启动大规模敏感性扫描: 1% 到 40% 动态截断阈值测试")
+    if cut_percentages is not None:
+        print(f"🚀 启动指定阈值扫描: {threshold_list}")
+    else:
+        print(f"🚀 启动区间阈值扫描: {threshold_list[0]}% 到 {threshold_list[-1]}%")
     print(f"   理论支撑: 寻找全局截断误差与物理动能捕获的 Bias-Variance 最优点")
     print(f"{'='*60}")
 
@@ -21,10 +47,10 @@ def batch_process_multiple_thresholds(base_data_dir="D:\\PYTHON\\layout design\\
         print("⚠️ 数据目录下没有找到子组数据文件夹！")
         return
 
-    print(f"[*] 共发现 {len(wave_folders)} 组内孤立波测试样本。即将开始 40 轮全量扫描...\n")
+    print(f"[*] 共发现 {len(wave_folders)} 组内孤立波测试样本。即将开始 {len(threshold_list)} 轮扫描...\n")
 
-    # 外层循环：遍历 1% 到 40% 的截断比例
-    for pct_int in range(1, 41):
+    # 外层循环：遍历指定的截断比例
+    for pct_int in threshold_list:
         pct = pct_int / 100.0  # 将 1 转换为 0.01
         
         # 检测文件是否已存在，若存在则跳过该阈值
@@ -163,8 +189,39 @@ def batch_process_multiple_thresholds(base_data_dir="D:\\PYTHON\\layout design\\
             print(f"   ✅ 成功保存: {output_filename} (包含 {len(df)} 组观测数据，平均误差: {df['error_pct'].mean():.2f}%)")
 
     print(f"\n{'='*60}")
-    print(f"🎉 全部 40 个阈值的数据生成完毕！")
+    print(f"🎉 全部 {len(threshold_list)} 个阈值的数据生成完毕！")
     print(f"{'='*60}")
 
 if __name__ == "__main__":
-    batch_process_multiple_thresholds()
+    print("请选择运行模式:")
+    print("1: 批量扫描区间 (例如 1-40)")
+    print("2: 仅计算单个 cut 百分比")
+    mode = input("输入模式 (1/2, 默认1): ").strip() or "1"
+
+    if mode == "2":
+        while True:
+            try:
+                single_cut = int(input("请输入 cut 百分比 (0-40): ").strip())
+                if 0 <= single_cut <= 40:
+                    break
+                print("请输入 0 到 40 之间的整数。")
+            except ValueError:
+                print("请输入有效整数。")
+
+        batch_process_multiple_thresholds(cut_percentages=[single_cut])
+    else:
+        range_text = input("请输入扫描区间 min-max (默认 1-40): ").strip()
+        min_pct = 1
+        max_pct = 40
+
+        if range_text:
+            try:
+                min_str, max_str = range_text.split("-")
+                min_pct = int(min_str.strip())
+                max_pct = int(max_str.strip())
+            except Exception:
+                print("区间格式无效，已回退到默认 1-40。")
+                min_pct = 1
+                max_pct = 40
+
+        batch_process_multiple_thresholds(min_pct=min_pct, max_pct=max_pct)

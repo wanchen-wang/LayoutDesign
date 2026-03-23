@@ -8,6 +8,22 @@ sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from Single_W_A_Lagrangian import run_single
 
+
+def _annotate_point(ax, x, y, text, dx, dy, color='black', fontsize=8):
+    """Annotate a point with readable boxed text and arrow."""
+    # Keep labels close to the point for better readability.
+    dx = max(-24, min(24, dx))
+    dy = max(-24, min(24, dy))
+    ax.annotate(
+        text,
+        xy=(x, y),
+        xytext=(dx, dy),
+        textcoords='offset points',
+        fontsize=fontsize,
+        color=color,
+        bbox=dict(boxstyle='round,pad=0.25', fc='white', ec=color, alpha=0.85),
+    )
+
 def plot_anatomy_fig3(t_array, w_obs, depth_obs, t_meet, thermocline_depth):
     """
     复刻 Anatomy Fig 3 绘图：垂直流速时序和滑翔机深度
@@ -33,6 +49,61 @@ def plot_anatomy_fig3(t_array, w_obs, depth_obs, t_meet, thermocline_depth):
     ax1.axvline(t_meet, color='black', linestyle=':', linewidth=1.5, alpha=0.6)
     ax1.text(t_meet + 20, max(w_obs)*0.8, f'Peak Encounter\nDepth: {thermocline_depth:.1f}m', color='black')
 
+    # 标注顶点与零线交点
+    peak_idx = int(np.argmax(w_obs))
+    trough_idx = int(np.argmin(w_obs))
+
+    ax1.scatter([t_array[peak_idx]], [w_obs[peak_idx]], color='red', s=35, zorder=6)
+    _annotate_point(
+        ax1,
+        t_array[peak_idx],
+        w_obs[peak_idx],
+        f"Peak\n({t_array[peak_idx]:.1f}s, {w_obs[peak_idx]:.3f}m/s)",
+        18,
+        18,
+        color='red',
+    )
+
+    ax1.scatter([t_array[trough_idx]], [w_obs[trough_idx]], color='#004b7a', s=35, zorder=6)
+    _annotate_point(
+        ax1,
+        t_array[trough_idx],
+        w_obs[trough_idx],
+        f"Trough\n({t_array[trough_idx]:.1f}s, {w_obs[trough_idx]:.3f}m/s)",
+        18,
+        -40,
+        color='#004b7a',
+    )
+
+    left_zero = peak_idx
+    while left_zero > 0 and w_obs[left_zero] > 0:
+        left_zero -= 1
+    right_zero = peak_idx
+    while right_zero < len(w_obs) - 1 and w_obs[right_zero] > 0:
+        right_zero += 1
+
+    ax1.scatter(
+        [t_array[left_zero], t_array[right_zero]],
+        [w_obs[left_zero], w_obs[right_zero]],
+        color='black',
+        s=22,
+        zorder=6,
+    )
+    _annotate_point(ax1, t_array[left_zero], w_obs[left_zero], f"Zero L\n({t_array[left_zero]:.1f}s, {w_obs[left_zero]:.3f})", -92, 22)
+    _annotate_point(ax1, t_array[right_zero], w_obs[right_zero], f"Zero R\n({t_array[right_zero]:.1f}s, {w_obs[right_zero]:.3f})", 24, 22)
+
+    meet_idx = int(np.argmin(np.abs(t_array - t_meet)))
+    ax1.scatter([t_array[meet_idx]], [w_obs[meet_idx]], color='purple', s=30, zorder=6)
+    _annotate_point(
+        ax1,
+        t_array[meet_idx],
+        w_obs[meet_idx],
+        f"Meet\n({t_array[meet_idx]:.1f}s, {w_obs[meet_idx]:.3f}m/s)",
+        18,
+        -40,
+        color='purple',
+    )
+
     ax1.set_xlabel('Time (s)', fontsize=12)
     ax1.set_ylabel(r'$w_{isw}$ (m s$^{-1}$)', color='#005b96', fontsize=12)
     ax1.set_title('Underwater Glider Trajectory and Vertical Water Speed Sampling', fontsize=14)
@@ -56,6 +127,24 @@ def plot_lagrangian_sampling(t_array, w_isw_array, w_obs_array, depth_obs, t_int
     ax1 = plt.gca()
     ax1.plot(t_array, w_isw_array, color='#005b96', label='Water Velocity $w_{isw}$', linewidth=2)
     ax1.fill_between(t_integral, 0, w_integral, color='#f4a1c1', alpha=0.6, label=f'Integrated Area (dh_raw={dh_raw:.1f}m)')
+
+    # 标注积分区起止点及峰值
+    peak_idx = int(np.argmax(w_isw_array))
+    ax1.scatter([t_array[peak_idx]], [w_isw_array[peak_idx]], color='red', s=35, zorder=6)
+    _annotate_point(
+        ax1,
+        t_array[peak_idx],
+        w_isw_array[peak_idx],
+        f"Peak\n({t_array[peak_idx]:.1f}s, {w_isw_array[peak_idx]:.3f})",
+        18,
+        18,
+        color='red',
+    )
+
+    if len(t_integral) > 0:
+        ax1.scatter([t_integral[0], t_integral[-1]], [w_integral[0], w_integral[-1]], color='black', s=24, zorder=6)
+        _annotate_point(ax1, t_integral[0], w_integral[0], f"Start\n({t_integral[0]:.1f}s, {w_integral[0]:.3f})", -92, 22)
+        _annotate_point(ax1, t_integral[-1], w_integral[-1], f"End\n({t_integral[-1]:.1f}s, {w_integral[-1]:.3f})", 24, 22)
     ax1.set_xlabel('Time (s)')
     ax1.set_ylabel('Water Vertical Velocity (m/s)', color='#005b96')
     ax1.tick_params(axis='y', labelcolor='#005b96')

@@ -55,5 +55,5 @@ def analyze_integration_duration(file_path):
 
 # 运行代码：请替换为你实际生成的拉格朗日数据文件
 if __name__ == "__main__":
-    analyze_integration_duration('analysis_results_swA_lagrangian.csv')
+    analyze_integration_duration(r'D:\PYTHON\layout design\Analysis_Results_SwA_Lagrangian_Cut_Data\analysis_results_swA_lagrangian_0cut.csv')
     pass

@@ -3,6 +3,50 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
+
+def fit_curve_and_extremum(x, y, max_degree=4):
+    """Fit a smooth polynomial curve and find the minimum point in the domain."""
+    x_arr = np.asarray(x, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+
+    if len(x_arr) < 3:
+        return None
+
+    degree = min(max_degree, len(x_arr) - 1)
+    if degree < 2:
+        degree = 2
+
+    coeffs = np.polyfit(x_arr, y_arr, degree)
+    poly = np.poly1d(coeffs)
+    dpoly = np.polyder(poly)
+
+    x_min, x_max = float(np.min(x_arr)), float(np.max(x_arr))
+
+    roots = np.roots(dpoly)
+    real_roots = roots[np.isreal(roots)].real
+    in_domain = real_roots[(real_roots >= x_min) & (real_roots <= x_max)]
+
+    candidates = np.concatenate(([x_min, x_max], in_domain))
+    candidate_y = poly(candidates)
+    best_idx = int(np.argmin(candidate_y))
+    x0 = float(candidates[best_idx])
+    y0 = float(candidate_y[best_idx])
+    slope = float(dpoly(x0))
+
+    x_dense = np.linspace(x_min, x_max, 400)
+    y_fit = poly(x_dense)
+    y_tangent = y0 + slope * (x_dense - x0)
+
+    return {
+        'x_dense': x_dense,
+        'y_fit': y_fit,
+        'x0': x0,
+        'y0': y0,
+        'slope': slope,
+        'y_tangent': y_tangent,
+        'degree': degree
+    }
+
 def analyze_truncation_sensitivity(data_dir, max_pct=40):
     print(f"\n{'='*65}")
     print(f"🚀 启动深度诊断: 截断阈值 (0%-{max_pct}%) 参数敏感性与误差分解")
@@ -63,9 +107,14 @@ def analyze_truncation_sensitivity(data_dir, max_pct=40):
     # 寻找最佳理论截断点
     best_mbe_idx = np.argmin(np.abs(mbe_list))
     best_mae_idx = np.argmin(mae_list)
+    best_rmse_idx = np.argmin(rmse_list)
     
     best_pct_mbe = thresholds[best_mbe_idx]
     best_pct_mae = thresholds[best_mae_idx]
+
+    # 对 MAE/RMSE 曲线做多项式拟合，并求极点与切线
+    mae_fit = fit_curve_and_extremum(thresholds, mae_list, max_degree=4)
+    rmse_fit = fit_curve_and_extremum(thresholds, rmse_list, max_degree=4)
 
     # 3. 绘制多维误差全景折线图
     plt.figure(figsize=(12, 7))
@@ -77,6 +126,37 @@ def analyze_truncation_sensitivity(data_dir, max_pct=40):
     # 绘制 RMSE 曲线 (U型波动惩罚)
     plt.plot(thresholds, rmse_list, marker='s', markersize=6, linewidth=2.5, 
              color='#e74c3c', label='RMSE (Root Mean Square Error) - Outlier Penalty')
+
+    # 绘制 MAE / RMSE 拟合曲线
+    if mae_fit is not None:
+        plt.plot(mae_fit['x_dense'], mae_fit['y_fit'], linestyle='--', linewidth=2,
+                 color='#27ae60', alpha=0.95, label=f"MAE Fitted Curve (deg={mae_fit['degree']})")
+    if rmse_fit is not None:
+        plt.plot(rmse_fit['x_dense'], rmse_fit['y_fit'], linestyle='--', linewidth=2,
+                 color='#c0392b', alpha=0.95, label=f"RMSE Fitted Curve (deg={rmse_fit['degree']})")
+
+    # 绘制 MAE / RMSE 极点切线并标注极点坐标
+    if mae_fit is not None:
+        plt.plot(mae_fit['x_dense'], mae_fit['y_tangent'], linestyle='-.', linewidth=1.8,
+                 color='#145a32', alpha=0.9, label='MAE Extremum Tangent')
+        plt.scatter([mae_fit['x0']], [mae_fit['y0']], color='#145a32', s=28, zorder=6,
+                    edgecolors='k', marker='D')
+        plt.annotate(f"MAE Extremum\n({mae_fit['x0']:.2f}%, {mae_fit['y0']:.2f}%)",
+                     xy=(mae_fit['x0'], mae_fit['y0']),
+                     xytext=(mae_fit['x0'] + 1.2, mae_fit['y0'] + 3.0),
+                     arrowprops=dict(facecolor='#145a32', shrink=0.05, width=1, headwidth=5),
+                     fontsize=10)
+
+    if rmse_fit is not None:
+        plt.plot(rmse_fit['x_dense'], rmse_fit['y_tangent'], linestyle='-.', linewidth=1.8,
+                 color='#641e16', alpha=0.9, label='RMSE Extremum Tangent')
+        plt.scatter([rmse_fit['x0']], [rmse_fit['y0']], color='#641e16', s=28, zorder=6,
+                    edgecolors='k', marker='D')
+        plt.annotate(f"RMSE Extremum\n({rmse_fit['x0']:.2f}%, {rmse_fit['y0']:.2f}%)",
+                     xy=(rmse_fit['x0'], rmse_fit['y0']),
+                     xytext=(rmse_fit['x0'] + 1.2, rmse_fit['y0'] + 3.0),
+                     arrowprops=dict(facecolor='#641e16', shrink=0.05, width=1, headwidth=5),
+                     fontsize=10)
              
     # 绘制 MBE 曲线 (单调穿零系统偏差)
     plt.plot(thresholds, mbe_list, marker='^', markersize=6, linewidth=2.5, 
@@ -87,13 +167,13 @@ def analyze_truncation_sensitivity(data_dir, max_pct=40):
 
     # 标注最优点
     plt.axvline(best_pct_mae, color='gray', linestyle=':', alpha=0.6)
-    plt.scatter([best_pct_mae], [mae_list[best_mae_idx]], color='gold', s=150, zorder=5, edgecolors='k')
+    plt.scatter([best_pct_mae], [mae_list[best_mae_idx]], color='gold', s=30, zorder=5, edgecolors='k')
     plt.annotate(f'Lowest MAE\n({best_pct_mae}%, {mae_list[best_mae_idx]:.1f}%)', 
                  xy=(best_pct_mae, mae_list[best_mae_idx]), xytext=(best_pct_mae+1, mae_list[best_mae_idx]+5),
                  arrowprops=dict(facecolor='black', shrink=0.05, width=1, headwidth=5), fontsize=10)
 
     plt.axvline(best_pct_mbe, color='purple', linestyle=':', alpha=0.6)
-    plt.scatter([best_pct_mbe], [mbe_list[best_mbe_idx]], color='magenta', s=150, zorder=5, edgecolors='k')
+    plt.scatter([best_pct_mbe], [mbe_list[best_mbe_idx]], color='magenta', s=30, zorder=5, edgecolors='k')
     plt.annotate(f'Zero MBE Crossing\n({best_pct_mbe}%, {mbe_list[best_mbe_idx]:.1f}%)', 
                  xy=(best_pct_mbe, mbe_list[best_mbe_idx]), xytext=(best_pct_mbe+1, mbe_list[best_mbe_idx]-5),
                  arrowprops=dict(facecolor='black', shrink=0.05, width=1, headwidth=5), fontsize=10)
@@ -114,9 +194,13 @@ def analyze_truncation_sensitivity(data_dir, max_pct=40):
 
     # 4. 打印统计结论
     print(f"\n【诊断结论与参数优选】")
-    print(f"  🔹 [稳定性] 最低 RMSE 出现于 {thresholds[np.argmin(rmse_list)]}% 截断处，说明此时极端失效点被最大程度压制。")
+    print(f"  🔹 [稳定性] 最低 RMSE 出现于 {thresholds[best_rmse_idx]}% 截断处，说明此时极端失效点被最大程度压制。")
     print(f"  🔹 [准确度] 最低 MAE 出现于 {best_pct_mae}% 截断处，基础物理重建精度最高。")
     print(f"  🔹 [系统差] MBE 在 {best_pct_mbe}% 截断处最接近 0，意味着此时长尾带来的“正向面积虚增”与提前截断带来的“负向能量丢失”达到完美抵消。")
+    if mae_fit is not None:
+        print(f"  🔹 [拟合极点] MAE 拟合曲线极点坐标: ({mae_fit['x0']:.2f}%, {mae_fit['y0']:.2f}%)，切线斜率: {mae_fit['slope']:.4f}")
+    if rmse_fit is not None:
+        print(f"  🔹 [拟合极点] RMSE 拟合曲线极点坐标: ({rmse_fit['x0']:.2f}%, {rmse_fit['y0']:.2f}%)，切线斜率: {rmse_fit['slope']:.4f}")
     print(f"  💡 综合建议: 如果 MAE 谷底与 MBE 穿零点非常接近，该区间即为最无懈可击的【黄金截断阈值】！")
     print(f"{'='*65}\n")
 
