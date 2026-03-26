@@ -241,7 +241,7 @@ def plot_vertical_velocity_3d(x_grid, y_grid, z, W_Vel_3D, W, a_coef, h0, D):
     plt.show()
 
 
-def list_groups(base_dir="V_Wave_Data"):
+def list_groups(base_dir="V_Wave_Data_Line"):
     if not os.path.isdir(base_dir):
         return []
     items = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
@@ -261,9 +261,9 @@ def resolve_data_root(user_input=None):
     cwd = os.getcwd()
 
     candidates = [
-        os.path.join(cwd, "V_Wave_Data"),
-        os.path.join(script_dir, "V_Wave_Data"),
-        os.path.join(script_dir, "..", "V_Wave_Data"),
+        os.path.join(cwd, "V_Wave_Data_Line"),
+        os.path.join(script_dir, "V_Wave_Data_Line"),
+        os.path.join(script_dir, "..", "V_Wave_Data_Line"),
     ]
 
     for candidate in candidates:
@@ -308,7 +308,7 @@ def load_data(data_dir):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="从已有 V_Wave 数据中读取并绘图")
+    parser = argparse.ArgumentParser(description="从已有 V_Wave_Data_Line 数据中读取并绘图")
     parser.add_argument("--data-root", type=str, default=None, help="已有数据根目录（包含多个时间戳子目录）")
     parser.add_argument("--group", type=str, default=None, help="直接指定要绘图的数据组目录名（如 20260320_145420）")
     args = parser.parse_args()
@@ -317,7 +317,7 @@ if __name__ == "__main__":
         data_root = resolve_data_root(args.data_root)
     except FileNotFoundError as e:
         print(f"{e}")
-        print("示例: python V_Wave_Plot.py --data-root ..\\V_Wave_Data")
+        print("示例: python V_Wave_Plot_Line.py --data-root ..\\V_Wave_Data_Line")
         sys.exit(1)
 
     groups = list_groups(data_root)

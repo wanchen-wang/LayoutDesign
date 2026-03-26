@@ -34,6 +34,10 @@ def mw_u_test_and_violin_plot(base_dir):
     err_base = df_base['error_pct'].dropna()
     err_opt = df_opt['error_pct'].dropna()
 
+    # 计算“95%误差集中阈值”（95分位数）：95%的样本误差低于该值
+    p95_base = np.percentile(err_base, 95)
+    p95_opt = np.percentile(err_opt, 95)
+
     # 2. 执行曼-惠特尼 U 检验 (双侧检验)
     stat, p_value = mannwhitneyu(err_base, err_opt, alternative='two-sided')
     
@@ -52,6 +56,18 @@ def mw_u_test_and_violin_plot(base_dir):
     ax = sns.violinplot(x='Group', y='error_pct', data=df_combined, 
                         palette=['#e74c3c', '#2ecc71'], inner='box', cut=0, alpha=0.8)
 
+    # 在每组上添加 95% 误差阈值线（95 分位数）
+    ax.hlines(y=p95_base, xmin=-0.28, xmax=0.28, color='#c0392b', linestyle='--', linewidth=2,
+              label='Baseline 95th Percentile')
+    ax.hlines(y=p95_opt, xmin=0.72, xmax=1.28, color='#27ae60', linestyle='--', linewidth=2,
+              label='Optimized 95th Percentile')
+
+    # 标注阈值数值
+    ax.text(0.0, p95_base, f'95% <= {p95_base:.2f}%', color='#c0392b', fontsize=10,
+            ha='center', va='bottom', fontweight='bold')
+    ax.text(1.0, p95_opt, f'95% <= {p95_opt:.2f}%', color='#27ae60', fontsize=10,
+            ha='center', va='bottom', fontweight='bold')
+
     # 图表装饰与统计标注
     plt.title('Error Distribution Comparison: Baseline vs. Optimized Truncation\n(Violin Plot with Kernel Density Estimation)', fontsize=14, pad=15)
     plt.ylabel('Absolute Percentage Error (%)', fontsize=12)
@@ -62,7 +78,9 @@ def mw_u_test_and_violin_plot(base_dir):
     stats_text = (f"Mann-Whitney U Test:\n"
                   f"U-Statistic = {stat:.1f}\n"
                   f"p-value = {p_value:.3e}\n"
-                  f"Cohen's d = {cohens_d:.2f}")
+                  f"Cohen's d = {cohens_d:.2f}\n"
+                  f"95% Threshold (Baseline) = {p95_base:.2f}%\n"
+                  f"95% Threshold (Optimized) = {p95_opt:.2f}%")
     
     # 根据 p 值给出显著性结论
     if p_value < 0.05:
