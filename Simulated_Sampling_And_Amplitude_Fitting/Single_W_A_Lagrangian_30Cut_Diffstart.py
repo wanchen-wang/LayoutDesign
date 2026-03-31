@@ -17,10 +17,10 @@ from scipy.interpolate import RegularGridInterpolator
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_SINGLE_GLIDER_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "Analysis_Results_SwA_Lagrangian_Cut_Data")
+DEFAULT_SINGLE_GLIDER_OUTPUT_DIR = os.path.join(PROJECT_ROOT, "Analysis_C_Data", "Trajectories")
 DEFAULT_SINGLE_GLIDER_OUTPUT_CSV = os.path.join(
     DEFAULT_SINGLE_GLIDER_OUTPUT_DIR,
-    "analysis_results_swA_lagrangian_30cut.csv",
+    "analysis_results_swA_lagrangian_30Cut_Diffstart.csv",
 )
 
 
@@ -140,7 +140,7 @@ def run_single_group_30cut(
 
     # 一个下潜-上升周期 = 12000 s：前 6000 s 下潜，后 6000 s 上升
     # 根据全局发车时刻算出仿真开始时滑翔机处于哪个阶段、具体深度
-    t_mod_start = (T0_global + start_time) % 12000.0
+    t_mod_start = start_time % 12000.0
     if t_mod_start < 6000.0:
         z_g = t_mod_start * depth_max / 6000.0           # 下潜阶段
     else:
@@ -148,7 +148,8 @@ def run_single_group_30cut(
 
     for i, t_local in enumerate(t_local_array):
         t_global = T0_global + t_local
-        t_mod    = t_global % 12000.0
+        # 【核心修复】：滑翔机的飞行姿态只受自身出发后的相对时间 (t_local) 决定
+        t_mod    = t_local % 12000.0  
         # 各阶段的基本垂向速度：下潜时为负（深度增大），上升时为正
         w_stdy = -depth_max / 6000.0 if t_mod < 6000.0 else depth_max / 6000.0
 

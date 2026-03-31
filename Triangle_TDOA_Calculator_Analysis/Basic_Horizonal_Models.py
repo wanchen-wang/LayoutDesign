@@ -124,9 +124,9 @@ class DeploymentPlanner:
     def get_local_encounter_points(self):
         # 尖端为(0,0)，底边两台滑翔机在它的后方距离 H 的位置展开
         return {
-            1: np.array([-self.H, -self.L / 2.0]),  # 底边下 (落后于尖端)
-            2: np.array([-self.H, self.L / 2.0]),   # 底边上 (落后于尖端)
-            3: np.array([0.0, 0.0])                # 尖端滑翔机，牢牢锚定在 (0,0)
+            1: np.array([0.0, 0.0]),  # 尖端滑翔机，牢牢锚定在 (0,0)
+            2: np.array([-self.H, -self.L / 2.0]),  # 底边下 (落后于尖端)
+            3: np.array([-self.H, self.L / 2.0]),   # 底边上 (落后于尖端)
         }
 
     def calculate_surface_deployment(self, t_encounter_dict, theta_true_rad, X_offset=0.0, Y_offset=0.0):
@@ -190,16 +190,20 @@ class VirtualSampler:
         self.planner = planner
 
     def generate_theoretical_times(self, C_p_true, theta_true_deg, t0=0.0):
-        """正向运动学：生成理想无偏环境下的理论到达时间 (Baseline Test)"""
+        """正向运动学：生成理想无偏环境下的理论到达时间 (Baseline Test)
+        返回顺序: (t_node1=尖端, t_node2=底边下, t_node3=底边上)
+        """
         theta_rad = np.radians(theta_true_deg)
         C_app = C_p_true + self.planner.v_g # 视在相速度
         
-        # 严格按照等腰三角形迎面逆行的法向投影推导
-        t1 = t0 + (-self.planner.L * np.sin(theta_rad) / 2.0) / C_app
-        t2 = t0 + ( self.planner.L * np.sin(theta_rad) / 2.0) / C_app
-        t3 = t0 + (-self.planner.H * np.cos(theta_rad)) / C_app
+        # 尖端 (node1): 局部坐标 (0, 0)
+        t_tip   = t0 + (-self.planner.H * np.cos(theta_rad)) / C_app
+        # 底边下 (node2): 局部坐标 (-H, -L/2)
+        t_lower = t0 + (-self.planner.L * np.sin(theta_rad) / 2.0) / C_app
+        # 底边上 (node3): 局部坐标 (-H, +L/2)
+        t_upper = t0 + ( self.planner.L * np.sin(theta_rad) / 2.0) / C_app
         
-        return t1, t2, t3
+        return t_tip, t_lower, t_upper
 
     def extract_from_3d_data(
         self,
@@ -261,16 +265,17 @@ class TdoaInverter:
         """
         解耦时空维度，消除多普勒涂抹，纯数学反推。
 
-        参数:
-          t1, t2 — 底边两节点的峰值到达时刻 (s)
-          t3     — 尖端节点的峰值到达时刻   (s)
+        参数约定（与节点物理编号对应）:
+          t1 — node1 尖端节点的峰値到达时刻 (s)
+          t2 — node2 底边下节点的峰値到达时刻 (s)
+          t3 — node3 底边上节点的峰値到达时刻 (s)
         返回:
           C_p_calc       — 内波真实相速度 (m/s)
           theta_calc_deg — 传播偏角       (deg)
         """
-        # 底边节点时差 → 感知 y 方向；底边中点与尖端时差 → 感知 x 方向
-        delta_t_y = t2 - t1
-        delta_t_x = 0.5 * (t1 + t2) - t3
+        # 底边两节点时差 → 感知 y 方向；底边中点与尖端时差 → 感知 x 方向
+        delta_t_y = t3 - t2                  # node3(底边上) - node2(底边下)
+        delta_t_x = 0.5 * (t2 + t3) - t1    # 底边中点 - 尖端(node1)
 
         # 归一化：时差 / 空间间距 = 视在慢度在该方向的投影
         y_comp = delta_t_y / self.L
@@ -449,6 +454,7 @@ def run_tdoa_group(
     inverter = TdoaInverter(L_spacing, H_spacing, v_g)
 
     # 步骤 2: 正向运动学 → 理论相遇时刻
+    # t1_ref=尖端(node1), t2_ref=底边下(node2), t3_ref=底边上(node3)
     t1_ref, t2_ref, t3_ref = sampler.generate_theoretical_times(
         C_p_real, theta_real_deg, t0=t0_ref
     )
@@ -468,9 +474,10 @@ def run_tdoa_group(
     )
 
     # 步骤 5: TDOA 反解
-    t1_obs = node_results[1]["t_peak"]
-    t2_obs = node_results[2]["t_peak"]
-    t3_obs = node_results[3]["t_peak"]
+    # inverter.solve(t1=尖端, t2=底边下, t3=底边上)
+    t1_obs = node_results[1]["t_peak"]  # node1 = 尖端
+    t2_obs = node_results[2]["t_peak"]  # node2 = 底边下
+    t3_obs = node_results[3]["t_peak"]  # node3 = 底边上
     C_p_calc, theta_calc = inverter.solve(t1_obs, t2_obs, t3_obs)
 
     return {
@@ -622,10 +629,10 @@ if __name__ == "__main__":
     params_real = ConfigManager.load_params(params_path)
 
     C_p_real = params_real["c0"]
-    theta_real = 15.0 # 测试偏角：15度
+    theta_real = -15.0 # 测试偏角：-15度
 
     # --- B. 阵列与滑翔机参数配置 ---
-    L_spacing = 20000.0   # 等腰三角形底边 (y方向间距 20km)
+    L_spacing = 6800.0   # 等腰三角形底边 (y方向间距 20km)
     H_spacing = 2000.0   # 等腰三角形高 (x方向间距 2km)
     glider_cfg = get_glider_config()
     
