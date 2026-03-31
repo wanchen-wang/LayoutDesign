@@ -1,0 +1,95 @@
+1. 系统架构概述
+本系统采用四层解耦的模块化架构设计。系统涵盖从底层三维海洋环境数据生成、观测节点部署规划、拉格朗日轨迹采样，至时间差（TDOA）纯数学反演与空间可视化的全链路流程。各层级之间通过明确的输入输出参数传递数据，确保实验具有可重复性与参数可控性。
+
+--------------------------------------------------------------------------------
+2. 第一层：环境与数据层 (Environment & Data Layer)
+核心文件：V_Wave_Line.py 与 V_Wave_Generate_Line.py 模块功能：构建理想的三维直线内孤立波流场与背景层化剖面，生成用于后续采样的全套数值网格文件。
+主接口：run_simulation
+输入 (Inputs):
+depth_max (float)：最大水深参数（单位：米）。
+num_points (int)：垂直深度轴的网格节点数量。
+nx (int)：X 轴水平网格节点数量。
+ny (int)：Y 轴水平网格节点数量。
+输出 (Outputs):
+W_Vel_3D.npy：三维垂直流速场矩阵文件。
+T_3D.npy：三维温度场矩阵文件。
+x_grid.npy：X 轴空间坐标网格文件。
+y_grid.npy：Y 轴空间坐标网格文件。
+z.npy：Z 轴（深度）坐标数据文件。
+rho_profile.npy：背景密度剖面文件。
+N2_profile.npy：背景浮力频率平方剖面文件。
+T_profile.npy：背景温度剖面文件。
+W_profile.npy：第一模态垂直结构剖面文件。
+U_profile.npy：第一模态水平结构剖面文件。
+params.json：全局物理参数文件，内部包含且仅包含 c0（理论相速度）、h0（理论最大振幅）、Ly（Y 轴网格长度）、a_coef（非线性系数）、D（特征半波宽）、thermocline_depth（最大振幅发生深度）。
+
+--------------------------------------------------------------------------------
+3. 第二层：部署规划与逆向解算层 (Command & Inversion Layer)
+核心文件：Basic_Horizonal_Models.py 模块功能：负责计算各滑翔机节点的三维发车初始状态，并基于获取的时间戳执行数学反演计算。
+子接口 3.1：DeploymentPlanner.calculate_surface_deployment
+输入 (Inputs):
+L (float)：等腰三角形阵列底边长度。
+H (float)：等腰三角形阵列高度。
+v_g (float)：滑翔机水平运动速度。
+v_z (float)：滑翔机垂直下潜速度。
+z_max (float)：目标相遇最大振幅深度。
+t_encounter_dict (dict)：包含3个节点目标相遇绝对时间的数据字典。
+theta_true_rad (float)：预设的波浪相对传播偏角（弧度制）。
+X_offset (float)：三维流场网格 X 轴坐标平移量。
+Y_offset (float)：三维流场网格 Y 轴坐标平移量。
+输出 (Outputs):
+deploy_cmds (dict)：包含3个节点发车指令的数据字典，内部包含 X0_global（全局发车 X 坐标）、Y0_global（全局发车 Y 坐标）、T0_global（全局发车绝对时间）、t_enc（保留的目标相遇时间）。
+子接口 3.2：TdoaInverter.solve
+输入 (Inputs):
+t1 (float)：节点 1 探测到垂直流速最大值的时间戳。
+t2 (float)：节点 2 探测到垂直流速最大值的时间戳。
+t3 (float)：节点 3 探测到垂直流速最大值的时间戳。
+输出 (Outputs):
+C_p_calc (float)：剔除滑翔机运动速度后的内波真实相速度反演值。
+theta_calc_deg (float)：内波相对传播偏角反演值（角度制）。
+子接口 3.3：run_tdoa_group
+输入 (Inputs):
+data_dir (str)：指定的单组波场数据读取路径。
+L_spacing (float)：阵列底边长度设定值。
+H_spacing (float)：阵列高度设定值。
+glider_cfg (dict)：包含滑翔机运动学约束（v_g, v_z, depth_max）的配置字典。
+theta_real_deg (float)：真实传播偏角测试设定值。
+t0_ref (float)：时间轴理论参考零点。
+cut_percentage (int)：流速截断阈值百分比。
+输出 (Outputs):
+result_dict (dict)：全链路计算结果字典，内部包含发车指令字典、三个节点提取的到达时间 t1_obs、t2_obs、t3_obs，反演相速度 C_p_calc，反演偏角 theta_calc_deg，以及包含空间轨迹原始序列的 raw_data_dict 字典。
+
+--------------------------------------------------------------------------------
+4. 第三层：虚拟采样执行层 (Sampling Execution Layer)
+核心文件：Single_W_A_Lagrangian_30Cut_Diffstart.py 模块功能：控制虚拟滑翔机在三维网格矩阵中按照物理约束进行三维运动插值采样，并提取波峰到达时间。
+主接口：run_single_group_30cut
+输入 (Inputs):
+data_dir (str)：环境数据读取路径。
+X0_global (float)：当前滑翔机的全局 X 轴起始坐标。
+Y0_global (float)：当前滑翔机的全局 Y 轴起始坐标。
+T0_global (float)：当前滑翔机的全局起始下潜时间。
+cut_percentage (int)：数据截断处理的阈值百分比。
+glider_config (dict)：滑翔机运动约束参数字典。
+enable_amplitude_calc (bool)：是否执行振幅误差拟合计算的状态开关。
+输出 (Outputs):
+t_obs (float)：经截断与曲线拟合后锁定的极大值发生时间。
+raw_data_dict (dict)：航迹序列字典，内部包含四个数组：t_global_array（时间序列）、x_track_global（X 坐标序列）、y_track_global（Y 坐标序列）、z_track（深度坐标序列）。
+
+--------------------------------------------------------------------------------
+5. 第四层：可视化与评估层 (Visualization & Evaluation Layer)
+核心文件：Triangle_Layout_Plot.py 模块功能：对全局三维波面、滑翔机观测轨迹以及阵型相遇状态进行二维及三维图形渲染。
+主接口：generate_layout_views
+输入 (Inputs):
+data_dir (str)：波场数据路径。
+output_dir (str)：图像保存目标路径。
+L_spacing (float)：阵列底边长。
+H_spacing (float)：阵列高度。
+theta_real_deg (float)：预设传播偏角。
+t0_ref (float)：理论参考时间。
+cut_percentage (float)：阈值截断百分比。
+glider_cfg (dict)：滑翔机配置字典。
+show (bool)：控制是否在屏幕显示渲染图像的开关。
+save (bool)：控制是否将渲染图像写入磁盘的开关。
+输出 (Outputs):
+triangle_layout_topview_[group_name].png：包含 4 个子窗口的阵列采样二维俯视图像文件。
+动态三维 matplotlib 图像对象序列（基于 show 开关渲染至屏幕的 3D 交互图像）。
