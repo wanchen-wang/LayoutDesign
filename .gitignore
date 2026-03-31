@@ -29,6 +29,6 @@ build/
 .ipynb_checkpoints/
 
 *.npy
-*.csv
+
 *.xlsx
 *.npz
