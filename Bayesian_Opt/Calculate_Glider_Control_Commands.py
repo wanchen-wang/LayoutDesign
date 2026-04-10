@@ -1,0 +1,271 @@
+import numpy as np
+from scipy.optimize import fsolve
+
+def calculate_glider_control_commands(u_g, w_g, z_depth, rho_z, Temp_z, T_0, CD0=0.318, gamma_compress=3.2e-6):
+    """
+    全耦合逆向制导程序：通过期望的水平/垂直速度，解算出所有的飞行姿态角与底层硬件控制指令。
+    
+    【输入参数】:
+    - u_g: 期望水平速度 (m/s)，必须 >= 0
+    - w_g: 期望垂直速度 (m/s)，约定：<0 为下潜，>0 为上浮
+    - z_depth: 当前深度 (m)
+    - rho_z: 当前深度海水密度 (kg/m^3)
+    - Temp_z: 当前深度海水温度 (℃)
+    - T_0: 海表参考温度 (℃)
+    - CD0: 当前零升阻力系数 (默认0.318，若模拟藤壶可增大此值)
+    - gamma_compress: 壳体压缩系数 (1/dbar)
+    
+    【输出返回值】:
+    - zeta_deg: 理论滑翔角 (度)
+    - theta_deg: 理论俯仰角 (度)
+    - alpha_deg: 理论攻角 (度)
+    - delta_Vb_mL: 浮力调节油量 (mL，<0 为抽油下潜，>0 为排油上浮)
+    - r_rx_mm: 电池包位移 (mm，>0 向前移，<0 向后移)
+    """
+    
+    # ==========================================================
+    # 0. 载入“海燕-II”基础物理参数 [2, 3]
+    # ==========================================================
+    m_total = 70.0               # 总质量 (kg)
+    g = 9.81                     # 重力加速度
+    F_g = m_total * g            # 总重力 (N)
+    A_area = np.pi * (0.22 / 2)**2 # 最大横截面积 (m^2)
+    L_glider = 2.17              # 机身长度 (m)
+    m_p = 16.0                   # 电池包质量 (kg)
+    epsilon = 6.6e-5             # 热膨胀系数 (1/℃)
+    V_0 = m_total / 1024.0       # 标定基础排水体积 (m^3)
+    
+    # 水动力系数多项式 (输入攻角 alpha 单位为 rad) [2]
+    def get_hydro_coeffs(alpha_rad):
+        C_L = 12.13 * alpha_rad + 0.0512
+        C_D = 8.514 * (alpha_rad**2) + CD0
+        C_M = -10.09 * alpha_rad - 0.019
+        return C_L, C_D, C_M
+
+    # ==========================================================
+    # 1. 运动学解算：通过水平/垂直速度求 滑翔角(ζ)、攻角(α)、俯仰角(θ)
+    # ==========================================================
+    V_target = np.sqrt(u_g**2 + w_g**2)
+    
+    # 悬浮或纯平飞检查 (速度极小或没有垂直速度时，滑翔机无法靠浮力滑行)
+    if V_target < 1e-4 or abs(w_g) < 1e-4:
+        # 计算仅为抵抗深海壳体压缩所需的补偿油量
+        vol_def = V_0 * (1 - gamma_compress * z_depth + epsilon * (Temp_z - T_0))
+        delta_Vb_m3 = (F_g / (rho_z * g)) - vol_def
+        return 0.0, 0.0, 0.0, delta_Vb_m3 * 1e6, 0.0
+
+    is_diving = (w_g < 0)
+    
+    # 1.1 求滑翔角绝对值 (ζ_mag)
+    zeta_mag = np.arctan(abs(w_g) / u_g)
+    
+    # 1.2 求攻角绝对值 (α_mag)
+    # 基于受力平衡引出的几何约束: tan(ζ + α) = (CD*cosα - CL*sinα) / (CD*sinα + CL*cosα) [4, 5]
+    def eq_alpha(alpha):
+        C_L, C_D, _ = get_hydro_coeffs(alpha)
+        num = C_D * np.cos(alpha) - C_L * np.sin(alpha)
+        den = C_D * np.sin(alpha) + C_L * np.cos(alpha)
+        return np.tan(zeta_mag + alpha) - (num / den)
+    
+    alpha_mag = fsolve(eq_alpha, np.radians(2.0))[0] # 初始猜测攻角为2度
+    
+    # 1.3 求俯仰角绝对值 (θ_mag)
+    theta_mag = zeta_mag + alpha_mag
+    
+    # ==========================================================
+    # 2. 动力学解算：通过角度与速度反推 净驱动力与水动力矩
+    # ==========================================================
+    C_L, C_D, C_M = get_hydro_coeffs(alpha_mag)
+    
+    # 计算动压 q = 0.5 * ρ * V^2 * A
+    q_dyn = 0.5 * rho_z * (V_target**2) * A_area
+    
+    # 反推维持该速度所需的净驱动力 |Fg - Fb|
+    # 公式依据: V = sqrt( 2|Fg-Fb|sinθ / (ρA(CDcosα - CLsinα)) ) [5]
+    force_term = C_D * np.cos(alpha_mag) - C_L * np.sin(alpha_mag)
+    F_net_mag = (2.0 * q_dyn * force_term) / np.sin(theta_mag)
+    
+    # ==========================================================
+    # 3. 硬件映射：计算油量(ΔVb) 与 电池位移(r_rx)
+    # ==========================================================
+    # 3.1 浮力调节系统 (油量)
+    # F_b_target 是滑翔机此刻在水中必须具备的真实浮力
+    if is_diving:
+        F_b_target = F_g - F_net_mag  # 下潜时，重力必须大于浮力
+    else:
+        F_b_target = F_g + F_net_mag  # 上浮时，浮力必须大于重力
+        
+    # 计算此时外壳被深海水压和温度改变后的等效体积 [6]
+    vol_deformation = V_0 * (1 - gamma_compress * z_depth + epsilon * (Temp_z - T_0))
+    
+    # 逆推油泵必须抽排多少体积 (换算为毫升 mL)
+    cmd_Vb_mL = ((F_b_target / (rho_z * g)) - vol_deformation) * 1e6
+    
+    # 3.2 姿态调节系统 (电池位移)
+    # 计算流体俯仰力矩
+    M_hydro_mag = abs(q_dyn * L_glider * C_M)
+    
+    # 电池包位移力矩平衡: M_hydro = m_p * g * r_rx * cosθ [5]
+    cmd_rrx_mm = (M_hydro_mag / (m_p * g * np.cos(theta_mag))) * 1000.0
+
+    # ==========================================================
+    # 4. 赋予物理方向符号并返回
+    # ==========================================================
+    if is_diving:
+        zeta_deg = -np.degrees(zeta_mag)    # 轨迹向下
+        theta_deg = -np.degrees(theta_mag)  # 机头向下
+        alpha_deg = np.degrees(alpha_mag)   # 对称翼型攻角通常取正
+        # cmd_Vb_mL 已经包含了准确的符号(若算出来不足标定体积，则为负，即向内抽油)
+        # 强制格式化符号：下潜时抽油(负)，重物前移(正)
+        cmd_Vb_mL = -abs(cmd_Vb_mL)
+        cmd_rrx_mm = abs(cmd_rrx_mm)
+    else:
+        zeta_deg = np.degrees(zeta_mag)     # 轨迹向上
+        theta_deg = np.degrees(theta_mag)   # 机头向上
+        alpha_deg = np.degrees(alpha_mag)
+        cmd_Vb_mL = abs(cmd_Vb_mL)          # 上浮时排油(正)
+        cmd_rrx_mm = -abs(cmd_rrx_mm)       # 重物后移(负)
+
+    return zeta_deg, theta_deg, alpha_deg, cmd_Vb_mL, cmd_rrx_mm
+
+def calculate_true_glider_motion(cmd_Vb_mL, cmd_rrx_mm, z_depth, rho_z, Temp_z, T_0, CD0_true=0.318, gamma_true=3.2e-6):
+    """
+    步骤 E（上帝物理视角）：正向动力学推演程序。
+    输入滑翔机硬件实际执行的动作，置入残酷的真实海洋环境（藤壶+水压），推演它真实的运动速度和姿态！
+    
+    【输入参数】:
+    - cmd_Vb_mL: 硬件实际抽排油量 (mL，<0 为抽油下潜)
+    - cmd_rrx_mm: 硬件实际移动电池包位移 (mm，>0 向前移)
+    - z_depth, rho_z, Temp_z: 真实深海环境参数 (1000m水深, 密度, 温度等)
+    - CD0_true: 真实海水中因藤壶附着而变大的阻力系数 (默认0.318)
+    - gamma_true: 深海高压下真实的壳体压缩系数 (默认 3.2e-6 /dbar)
+    
+    【输出返回值】:
+    - true_zeta_deg: 真实滑翔角 (度)
+    - true_theta_deg: 真实俯仰角 (度)
+    - true_alpha_deg: 真实攻角 (度)
+    - true_ug: 真实对水水平速度 (m/s)
+    - true_wg: 真实对水垂直速度 (m/s)
+    """
+    
+    # ==========================================================
+    # 0. 载入“海燕-II”基础物理参数 [3, 4]
+    # ==========================================================
+    m_total = 70.0               # 总质量 (kg)
+    g = 9.81                     # 重力加速度
+    F_g = m_total * g            # 总重力 (N)
+    A_area = np.pi * (0.22 / 2)**2 # 最大横截面积 (m^2)
+    L_glider = 2.17              # 机身长度 (m)
+    m_p = 16.0                   # 电池包质量 (kg)
+    epsilon = 6.6e-5             
+    V_0 = m_total / 1024.0      # 标定基础排水体积 (m^3)
+    
+    # 恶劣环境下的真实水动力系数多项式 [1, 5]
+    def get_true_hydro_coeffs(alpha_rad):
+        C_L = 12.13 * alpha_rad + 0.0512
+        C_D = 8.514 * (alpha_rad**2) + CD0_true  # 采用了变大的真实阻力
+        C_M = -10.09 * alpha_rad - 0.019
+        return C_L, C_D, C_M
+
+    # ==========================================================
+    # 1. 现实物理映射：计算水压与温度压迫下的真实净驱动力 [6]
+    # ==========================================================
+    # 深海 1000m 的巨大水压残酷地压瘪了铝合金外壳，损失了真实浮力
+    vol_deformation = V_0 * (1 - gamma_true * z_depth + epsilon * (Temp_z - T_0))
+    
+    # 滑翔机在水中的真实浮力 (包含被压瘪的外壳 + 实际抽入的油量)
+    F_b_true = rho_z * g * (vol_deformation + cmd_Vb_mL * 1e-6)
+    
+    # 真实净驱动力 (|Fg - Fb|)
+    F_net = F_g - F_b_true
+    F_drive = abs(F_net)
+    
+    # 悬浮或未产生驱动力保护
+    if F_drive < 1e-4:
+        return 0.0, 0.0, 0.0, 0.0, 0.0
+
+    r_rx_m = cmd_rrx_mm / 1000.0
+
+    # ==========================================================
+    # 2. 运动学降维解算：求取真实攻角 (α_true)
+    # 通过力矩平衡与受力平衡的巧妙比值，消去 V^2 和 θ，直接求 α 
+    # ==========================================================
+    def eq_alpha_forward(alpha):
+        C_L, C_D, C_M = get_true_hydro_coeffs(alpha)
+        # 物理依据: r_rx = (F_drive * L * C_M(α)) / (m_p * g * (C_D(α)*sinα + C_L(α)*cosα))
+        right_side = (F_drive * L_glider * abs(C_M)) / (m_p * g * (C_D * np.sin(alpha) + C_L * np.cos(alpha)))
+        return abs(r_rx_m) - right_side
+        
+    alpha_mag = fsolve(eq_alpha_forward, np.radians(2.0))[0]
+    C_L, C_D, C_M = get_true_hydro_coeffs(alpha_mag)
+
+    # ==========================================================
+    # 3. 求解真实俯仰角 (θ_true) 与 真实绝对速度 (V_true)
+    # ==========================================================
+    # 依据受力平衡关系求得真实俯仰角 [1]
+    tan_theta = (C_D * np.cos(alpha_mag) - C_L * np.sin(alpha_mag)) / (C_D * np.sin(alpha_mag) + C_L * np.cos(alpha_mag))
+    theta_mag = np.arctan(tan_theta)
+    
+    # 依据公式: V = sqrt( 2|Fg-Fb|sinθ / (ρA(CDcosα - CLsinα)) ) 计算真实速度 [2]
+    V_true = np.sqrt((2.0 * F_drive * np.sin(theta_mag)) / (rho_z * A_area * (C_D * np.cos(alpha_mag) - C_L * np.sin(alpha_mag))))
+
+    # 赋予物理符号
+    if F_net > 0: # 现实中滑翔机处于下潜状态
+        true_theta_deg = -np.degrees(theta_mag)
+        true_alpha_deg = np.degrees(alpha_mag)
+    else:         # 现实中滑翔机处于上浮状态
+        true_theta_deg = np.degrees(theta_mag)
+        true_alpha_deg = np.degrees(alpha_mag)
+
+    # ==========================================================
+    # 4. 速度坐标系分解
+    # ==========================================================
+    true_zeta_rad = np.radians(true_theta_deg - true_alpha_deg)
+    true_zeta_deg = np.degrees(true_zeta_rad)
+    
+    true_ug = V_true * np.cos(true_zeta_rad)
+    true_wg = V_true * np.sin(true_zeta_rad)
+
+    return true_zeta_deg, true_theta_deg, true_alpha_deg, true_ug, true_wg
+
+
+# ==================================
+# 测试程序执行
+# ==================================
+def main():
+    # 1. 设定目标速度与深海环境参数
+    target_ug = 0.22      # 期望水平速度 0.22 m/s
+    target_wg = -0.15     # 期望垂直速度 -0.15 m/s (代表下潜)
+    
+    z = 1000.0            # 深度 1000 m
+    rho = 1032.0          # 深海高密度 1032 kg/m^3
+    Temp_z = 5.0          # 当前深度的冷水温 5 ℃
+    T_0 = 25.0            # 海表参考温度 25 ℃
+    
+    print(f"【目标输入】: 期望水平速度 {target_ug} m/s, 期望垂直速度 {target_wg} m/s")
+
+    # ==========================================================
+    # 2. 机内大脑视角：调用逆向函数反推控制指令
+    # 假设机内电脑使用出厂理想参数 (表面光滑 CD0=0.318，且未补偿壳体压缩 gamma_compress=0)
+    # ==========================================================
+    zeta, theta, alpha, cmd_Vb_mL, cmd_rrx_mm = calculate_glider_control_commands(
+        target_ug, target_wg, z, rho, Temp_z, T_0, 
+        CD0=0.318, gamma_compress=0.0
+    )
+    
+    print(f"【硬件指令】: 抽排油量 {cmd_Vb_mL:.2f} mL, 电池位移 {cmd_rrx_mm:.2f} mm")
+
+    # ==========================================================
+    # 3. 上帝物理视角：调用正向函数推演真实速度
+    # 带着上面的硬件指令，置入真实的恶劣海洋 (长满藤壶 CD0=0.35，深海壳体压瘪 gamma=3.2e-6)
+    # ==========================================================
+    true_zeta, true_theta, true_alpha, true_ug, true_wg = calculate_true_glider_motion(
+        cmd_Vb_mL, cmd_rrx_mm, z, rho, Temp_z, T_0, 
+        CD0_true=0.35, gamma_true=3.2e-6
+    )
+    
+    print(f"【真实运动】: 实际水平速度 {true_ug:.4f} m/s, 实际垂直速度 {true_wg:.4f} m/s")
+    print(f"【垂直误差】: 机内大脑与物理现实的垂直速度差值为 {abs(target_wg) - abs(true_wg):.4f} m/s")
+
+if __name__ == "__main__":
+    main()
