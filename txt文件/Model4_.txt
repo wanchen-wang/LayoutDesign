@@ -1,0 +1,137 @@
+import os
+import numpy as np
+import pandas as pd
+from hyperopt import fmin, tpe, hp, Trials, STATUS_OK
+
+# 导入您的模块四底层评估函数
+from Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation import process_30cut
+
+# ==========================================================
+# 1. 获取流场数据并强制固定切分 (前20组训练，后15组测试)
+# ==========================================================
+BASE_DATA_DIR = r"D:\PYTHON\layout design\V_Wave_Data"
+
+# 获取目录下所有有效流场文件夹，并按名称（通常也是时间顺序）排序，确保每次读取顺序绝对一致
+all_run_dirs = sorted([
+    os.path.join(BASE_DATA_DIR, d) for d in os.listdir(BASE_DATA_DIR) 
+    if os.path.isdir(os.path.join(BASE_DATA_DIR, d))
+])
+
+# 【核心修改】：强制切片，拒绝随机！
+# 取排在最前面的 20 个文件夹作为训练集
+train_dirs = all_run_dirs[:20]  
+# 紧接着取第 21 到第 35 个文件夹（共15组）作为测试集
+test_dirs = all_run_dirs[20:35] 
+
+print(f"[*] 数据集固定划分完成: 训练集 {len(train_dirs)} 组 (前20), 测试集 {len(test_dirs)} 组 (后15).")
+
+# ==========================================================
+# 2. 定义目标函数 (针对固定的 20 组训练集)
+# ==========================================================
+def objective(params):
+    w_c_threshold = params['w_c_threshold']
+    zeta_target = params['zeta_target']
+    f_s = params['f_s']
+    V_ratio = params['V_ratio']
+    
+    # ------------------------------------------------------
+    # 速度边界比例映射 (防越界核心)
+    # ------------------------------------------------------
+    if zeta_target <= -23.64:
+        V_max = 0.5
+    else:
+        V_max = -0.0157 * zeta_target + 0.1293
+    V_target = V_ratio * V_max
+    
+    # ------------------------------------------------------
+    # 在固定的 20 组训练流场中跑批
+    # ------------------------------------------------------
+    raw_errors = []
+    for run_dir in train_dirs:
+        try:
+            error_val = process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_dir)
+            if error_val != 9999.0:
+                raw_errors.append(error_val)
+        except Exception:
+            continue
+            
+    # 防脱靶惩罚
+    if len(raw_errors) < 3: 
+        return {'loss': 9999.0, 'status': STATUS_OK}
+        
+    errors = np.array(raw_errors)
+    N = len(errors)
+    
+    # ------------------------------------------------------
+    # 五五占比：计算 MAE 与 95%置信区间宽度
+    # ------------------------------------------------------
+    MAE = np.mean(errors) 
+    
+    # 若全部成功，N应为20。N过小会导致宽度剧增，自然产生惩罚
+    std_err = np.std(errors, ddof=1) if N > 1 else 99.0
+    CI_width = 2 * 1.96 * (std_err / np.sqrt(N))
+    
+    weighted_loss = 0.50 * MAE + 0.50 * CI_width
+    
+    return {'loss': weighted_loss, 'status': STATUS_OK}
+
+# ==========================================================
+# 3. 定义贝叶斯优化的四维参数搜索空间
+# ==========================================================
+space = {
+    'w_c_threshold': hp.uniform('w_c_threshold', 0.05, 0.20),
+    'zeta_target': hp.uniform('zeta_target', -46.2, -19.7),
+    'V_ratio': hp.uniform('V_ratio', 0.0, 1.0),
+    'f_s': hp.quniform('f_s', 0.2, 10.0, 1) 
+}
+
+# ==========================================================
+# 4. 启动优化与泛化盲测
+# ==========================================================
+if __name__ == "__main__":
+    print("\n================= 阶段一：在固定的前 20 组训练集上进行优化 =================")
+    trials = Trials()
+    best_hyperparams = fmin(
+        fn=objective,
+        space=space,
+        algo=tpe.suggest,
+        max_evals=50,      
+        trials=trials,
+        rstate=np.random.default_rng(42) # 固定优化器自身的探索随机种子
+    )
+    
+    # 还原并打印参数
+    best_zeta = best_hyperparams['zeta_target']
+    best_V_max = 0.5 if best_zeta <= -23.64 else (-0.0157 * best_zeta + 0.1293)
+    best_V_target = best_hyperparams['V_ratio'] * best_V_max
+    
+    print("\n[+] 训练完成！找到的最优抗流观测策略参数为:")
+    print(f"  w_c_threshold : {best_hyperparams['w_c_threshold']:.3f} m/s")
+    print(f"  V_target      : {best_V_target:.3f} m/s")
+    print(f"  zeta_target   : {best_zeta:.2f} °")
+    print(f"  f_s           : {best_hyperparams['f_s']:.1f} Hz")
+    
+    print("\n================= 阶段二：在第21-35组测试集上进行验证 =================")
+    test_errors = []
+    for run_dir in test_dirs:
+        try:
+            err = process_30cut(best_hyperparams['w_c_threshold'], best_V_target, best_zeta, best_hyperparams['f_s'], run_dir)
+            if err != 9999.0:
+                test_errors.append(err)
+        except Exception:
+            continue
+            
+    test_errors = np.array(test_errors)
+    test_N = len(test_errors)
+    
+    if test_N > 0:
+        test_MAE = np.mean(test_errors)
+        test_std = np.std(test_errors, ddof=1) if test_N > 1 else 0
+        test_CI_width = 2 * 1.96 * (test_std / np.sqrt(test_N))
+        
+        print(f"\n[+] 测试集 (15组) 盲测得分:")
+        print(f"  测试集 MAE              : {test_MAE:.3f} m")
+        print(f"  测试集 95% 置信区间宽度 : {test_CI_width:.3f} m")
+        print(f"  测试集综合 Loss         : {0.5*test_MAE + 0.5*test_CI_width:.3f}")
+    else:
+        print("[-] 测试集评估失败。")

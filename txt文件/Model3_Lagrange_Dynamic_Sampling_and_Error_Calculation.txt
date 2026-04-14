@@ -188,8 +188,8 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
     rel_error = abs_error / Delta_Z_true if Delta_Z_true != 0 else float('inf')  # 相对误差
     J = abs_error
 
-    # print(f"[*] {os.path.basename(run_data_dir)} | |w_max|={w_max:.3f}m/s | dh_raw={dh_raw:.2f}m·s | doppler={doppler_factor:.3f} | W_z_meet={W_z_meet:.4f} | "
-    #       f"推算振幅={Delta_Z_calc:.2f}m | 真实={Delta_Z_true}m | 绝对误差={abs_error:.4f}m | 相对误差={rel_error*100:.2f}%")
+    print(f"[*] {os.path.basename(run_data_dir)} | |w_max|={w_max:.3f}m/s | dh_raw={dh_raw:.2f}m·s | doppler={doppler_factor:.3f} | W_z_meet={W_z_meet:.4f} | "
+          f"推算振幅={Delta_Z_calc:.2f}m | 真实={Delta_Z_true}m | 绝对误差={abs_error:.4f}m | 相对误差={rel_error*100:.2f}%")
 
     return {
         'J':            J,
