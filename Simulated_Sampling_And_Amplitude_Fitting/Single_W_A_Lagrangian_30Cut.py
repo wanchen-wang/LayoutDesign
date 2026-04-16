@@ -80,7 +80,7 @@ def process_30cut(
             half_window_time = max(4000.0, (8.0 * D) / V_rel)
             start_time = max(0, t_meet - half_window_time)
             end_time = t_meet + half_window_time
-            dt = 5.0
+            dt = 0.05
 
             t_array = np.arange(start_time, end_time, dt)
             w_isw_array = np.zeros_like(t_array, dtype=float)
@@ -166,7 +166,7 @@ def process_30cut(
 
         output_dir = "D:\\PYTHON\\layout design\\Analysis_A_UGstandard_Data"
         os.makedirs(output_dir, exist_ok=True)
-        output_filename = os.path.join(output_dir, f"analysis_results_swA_lagrangian_{pct_int}cut.csv")
+        output_filename = os.path.join(output_dir, f"analysis_results_swA_lagrangian_{pct_int}cut_dt0.05.csv")
         df.to_csv(output_filename, index=False)
         print(f"   ✅ 成功保存: {output_filename} (包含 {len(df)} 组观测数据，平均误差: {df['error_pct'].mean():.2f}%)")
 

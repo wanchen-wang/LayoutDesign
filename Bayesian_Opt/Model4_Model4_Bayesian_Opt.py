@@ -19,8 +19,8 @@ from Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation import process_30cut
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 ANALYSIS_DIR = r"D:\PYTHON\layout design\Analysis_A_Bayesian_Opt"
-HISTORY_CSV_PATH = os.path.join(ANALYSIS_DIR, "model4_bayesopt_history.csv")
-SUMMARY_JSON_PATH = os.path.join(ANALYSIS_DIR, "model4_bayesopt_summary.json")
+HISTORY_CSV_PATH = os.path.join(ANALYSIS_DIR, "model4_bayesopt_history_Continuous_4.csv")
+SUMMARY_JSON_PATH = os.path.join(ANALYSIS_DIR, "model4_bayesopt_summary_Continuous_4.json")
 
 BASE_DATA_DIR = r"D:\PYTHON\layout design\V_Wave_Data"
 DATA_SPLIT_SEED = 42
@@ -33,15 +33,15 @@ PENALTY_LOSS = 9999.0
 
 # W_C_THRESHOLD_CHOICES = [0.05, 0.10, 0.15, 0.20, 9999.0]
 # V_RATIO_CHOICES = [0.2, 0.4, 0.6, 0.8, 1.0]
-F_S_CHOICES = [0.2, 1.2, 2.2, 3.2, 4.2, 5.2, 6.2, 7.2, 8.2, 9.2, 10.0]
+F_S_CHOICES = [0.2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.0]
 
 W_MAE = 0.70
 W_CI = 0.30
 
 space = {
-    "w_c_threshold": hp.uniform("w_c_threshold", 0.15, 0.25),
-    "zeta_target": hp.uniform("zeta_target", -46.2, -23.64),
-    "V_ratio": hp.uniform("V_ratio", 0.3, 0.8),
+    "w_c_threshold": hp.uniform("w_c_threshold", 0.21, 0.24),
+    "zeta_target": hp.uniform("zeta_target", -46.2, -35),
+    "V_ratio": hp.uniform("V_ratio", 0.8, 1.0),
     "f_s": hp.choice("f_s", F_S_CHOICES),
 }
 
@@ -150,9 +150,9 @@ def build_history_dataframe(trials):
         w_mae = float(result.get("w_MAE", W_MAE))
         w_ci = float(result.get("w_CI", W_CI))
 
-        w_c_threshold = _decode_choice_value(vals["w_c_threshold"][0], W_C_THRESHOLD_CHOICES)
+        w_c_threshold = float(vals["w_c_threshold"][0])
         zeta_target = float(vals["zeta_target"][0])
-        v_ratio = _decode_choice_value(vals["V_ratio"][0], V_RATIO_CHOICES)
+        v_ratio = float(vals["V_ratio"][0])
         f_s = _decode_choice_value(vals["f_s"][0], F_S_CHOICES)
         v_target = _calc_v_target(zeta_target, v_ratio)
 
@@ -192,8 +192,8 @@ def _load_trials_from_history_csv(csv_path):
         w_mae = float(row["w_MAE"]) if "w_MAE" in row.index and pd.notna(row["w_MAE"]) else W_MAE
         w_ci = float(row["w_CI"]) if "w_CI" in row.index and pd.notna(row["w_CI"]) else W_CI
 
-        w_c_idx = _value_to_choice_idx(row["w_c_threshold"], W_C_THRESHOLD_CHOICES)
-        v_ratio_idx = _value_to_choice_idx(row["V_ratio"], V_RATIO_CHOICES)
+        w_c_val = float(row["w_c_threshold"])  # 直接取数值
+        v_ratio_val = float(row["V_ratio"])    # 直接取数值
         f_s_idx = _value_to_choice_idx(row["f_s"], F_S_CHOICES)
 
         docs.append(
@@ -220,9 +220,9 @@ def _load_trials_from_history_csv(csv_path):
                         "f_s": [int(i)],
                     },
                     "vals": {
-                        "w_c_threshold": [w_c_idx],
+                        "w_c_threshold": [w_c_val],       # 改为刚才定义的数值变量
                         "zeta_target": [float(row["zeta_target"])],
-                        "V_ratio": [v_ratio_idx],
+                        "V_ratio": [v_ratio_val],         # 改为刚才定义的数值变量
                         "f_s": [f_s_idx],
                     },
                 },

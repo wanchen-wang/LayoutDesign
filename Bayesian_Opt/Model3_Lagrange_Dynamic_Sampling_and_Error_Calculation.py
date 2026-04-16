@@ -67,9 +67,9 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
     start_time = max(0.0, t_meet - half_window_time)
     end_time   = t_meet + half_window_time
 
-    # 在 start_time 时刻，滑翔机相对波形核心的位置 → 流场坐标系起点
-    X = v_g * start_time - (x_init - Cp * start_time)  # x_eff_init
-    X = float(np.clip(X, x_grid[0], x_grid[-1]))
+    # # 在 start_time 时刻，滑翔机相对波形核心的位置 → 流场坐标系起点
+    # X = v_g * start_time - (x_init - Cp * start_time)  # x_eff_init
+    # X = float(np.clip(X, x_grid[0], x_grid[-1]))
 
     # 在 start_time 时刻，根据锯齿深度剖面反算初始深度
     t_mod_start = start_time % 12000.0
@@ -131,7 +131,7 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
         # -----------------------------------------------------------------
         # 【机制三：真实时空演化与离散采样】
         # -----------------------------------------------------------------
-        X += v_g * dt
+        # X += v_g * dt
         Z += w_abs * dt
         Z  = float(np.clip(Z, 0.0, 1000.0))  # 贴底/贴面反弹，不退出循环
         t += dt
@@ -213,7 +213,7 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
 #         w_c_threshold=0.1,   # 永远不触发高频模式，全程走常规巡航
 #         V_target=0.276,         # 不会被用到，随意
 #         zeta_target=-37.2,      # 不会被用到，随意
-#         f_s=1,                # 与参考文件 dt=5s 等价（1/5=0.2 Hz）
+#         f_s=0.2,                # 与参考文件 dt=5s 等价（1/5=0.2 Hz）
 #         run_data_dir=test_run_dir
 #     )
 #     print(f"\n绝对误差 = {error_score['abs_error']:.4f} m")
