@@ -6,9 +6,10 @@ import os
 # 设置随机种子以确保结果可重现
 np.random.seed(42)
 
-# 读取CSV文件
-file_path = r"D:\PYTHON\layout design\Analysis_A_UGstandard_Data\analysis_results_swA_lagrangian_30cut.csv"
-df = pd.read_csv(file_path)
+# 读取CSV文件，仅加载所需列以避免读取 error_density
+file_path = r"D:\PYTHON\layout design\Analysis_A_Bayesian_Opt\model4_bayesopt_history_Continuous_4.csv"
+use_columns = ['error_pct', 'abs_error']
+df = pd.read_csv(file_path, usecols=use_columns)
 
 print("=== Model5 贝叶斯优化对比分析 ===")
 print(f"总数据行数: {len(df)}")
@@ -51,10 +52,10 @@ print(f"置信区间宽度: {confidence_interval_upper - confidence_interval_low
 
 # 输出抽样数据的详细信息
 print("\n=== 抽样数据详情 ===")
-print("排名 | 相对误差(%) | 绝对误差 | 误差密度")
+print("排名 | 相对误差(%) | 绝对误差")
 print("-" * 50)
 for i, (idx, row) in enumerate(df_sample.iterrows(), 1):
-    print(f"{i:2d}   | {row['error_pct']:10.4f}   | {row['abs_error']:8.4f}   | {row['error_density']:10.6f}")
+    print(f"{i:2d}   | {row['error_pct']:10.4f}   | {row['abs_error']:8.4f} ")
 
 # 保存结果到CSV
 output_file = r"D:\PYTHON\layout design\Analysis_A_UGstandard_Data\Model5_Sample_Analysis.csv"

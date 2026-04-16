@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
-
+#这个函数的结构在Model3的运动采样模拟流程图.md里
 def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
     """
     流场读取插值 + 动态拉格朗日仿真采样 + 30%截断误差评估
@@ -143,54 +143,48 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
             sampled_data.append({'Time': t, 'Z': Z, 'w_c': w_c, 'f_s': current_fs})
             time_since_sample -= interval
 
-    # =====================================================================
-    # 4. 基于任务目标的纯误差寻优 (30% 截断评估)
-    # =====================================================================
+    # ── 30% 截断评估 ──────────────────────────────────────────────────────────
     df = pd.DataFrame(sampled_data)
     if df.empty:
-        return 9999.0 # 无效轨迹
+        raise RuntimeError("仿真轨迹为空，请检查初始参数或流场数据。")
+
+    # 为了加快速度和使用 while 逻辑，提取为 numpy 数组
+    t_array = df['Time'].values
+    w_array = df['w_c'].values
     
-    # 锁定时间序列中的垂直流速正向峰值（与参考程序一致，只找正峰）
-    w_series = df['w_c']
-    idx_max = w_series.idxmax()
-    w_max = float(w_series.iloc[idx_max])
+    # 1. 找最大值 (替代 idxmax)
+    idx_max = int(np.argmax(w_array))
+    w_max   = float(w_array[idx_max])
 
     if w_max <= 0:
-        return 9999.0  # 未检测到上涌，无效
+        raise RuntimeError("未检测到上涌正向波瓣，请检查参数。")
 
-    # 卡出 30% 截断阈值（基于正峰值，与参考程序一致）
     cutoff_val = 0.30 * w_max
 
-    # 向左找截断起点：从峰值向左，找最左侧仍 > cutoff_val 的点
-    left_side = w_series.iloc[:idx_max + 1]
-    valid_left = left_side[left_side > cutoff_val]
-    idx_start = int(valid_left.index[0]) if not valid_left.empty else int(idx_max)
+    # 2. 从峰值向左寻找起点（吸收参考答案逻辑：下山法）
+    idx_start = idx_max
+    while idx_start > 0 and w_array[idx_start] > cutoff_val:
+        idx_start -= 1
+        
+    # 3. 从峰值向右寻找终点
+    idx_end = idx_max
+    while idx_end < len(w_array) - 1 and w_array[idx_end] > cutoff_val:
+        idx_end += 1
 
-    # 向右找截断终点：从峰值向右，找最右侧仍 > cutoff_val 的点
-    right_side = w_series.iloc[idx_max:]
-    valid_right = right_side[right_side > cutoff_val]
-    idx_end = int(valid_right.index[-1]) if not valid_right.empty else int(idx_max)
+    # 4. 梯形数值积分 (此时使用 numpy 切片，idx_end 自动为右开区间)
+    t_integral = t_array[idx_start:idx_end]
+    w_integral = w_array[idx_start:idx_end]
+    dh_raw     = np.trapezoid(w_integral, x=t_integral)
 
-    # 在 [idx_start, idx_end] 截断区间内，对垂直流速做时间积分 (raw)
-    df_cut = df.loc[idx_start:idx_end].copy()
-    t_integral = df_cut['Time'].values
-    w_integral = df_cut['w_c'].values
-    dh_raw = np.trapezoid(w_integral, x=t_integral)
-
-    # 多普勒物理修正 (与 Single_W_A_Lagrangian.py 一致)
-    z_idx = np.argmin(np.abs(z_grid - thermocline_depth))
-    W_z_meet = W_profile[z_idx]
+    # 5. 结算误差计算
+    z_idx      = np.argmin(np.abs(z_grid - thermocline_depth))
+    W_z_meet   = float(W_profile[z_idx])
     doppler_factor = V_rel / Cp
-    Delta_Z_calc = abs(dh_raw * doppler_factor / W_z_meet)
-
-    # 误差计算
-    abs_error = abs(Delta_Z_calc - Delta_Z_true)          # 绝对误差
-    rel_error = abs_error / Delta_Z_true if Delta_Z_true != 0 else float('inf')  # 相对误差
-    J = abs_error
-
-    # print(f"[*] {os.path.basename(run_data_dir)} | |w_max|={w_max:.3f}m/s | dh_raw={dh_raw:.2f}m·s | doppler={doppler_factor:.3f} | W_z_meet={W_z_meet:.4f} | "
-    #       f"推算振幅={Delta_Z_calc:.2f}m | 真实={Delta_Z_true}m | 绝对误差={abs_error:.4f}m | 相对误差={rel_error*100:.2f}%")
-
+    Delta_Z_calc   = abs(dh_raw * doppler_factor / W_z_meet)
+    J              = abs(Delta_Z_calc - Delta_Z_true)
+    abs_error       = J
+    rel_error       = abs_error / Delta_Z_true * 100 if Delta_Z_true != 0 else float('inf')
+    
     return {
         'J':            J,
         'abs_error':    abs_error,
@@ -210,11 +204,11 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
     
 #     # 将优化器的四参数直接投喂给评估函数
 #     error_score = process_30cut(
-#         w_c_threshold=0.1,   # 永远不触发高频模式，全程走常规巡航
+#         w_c_threshold=9999,   # 永远不触发高频模式，全程走常规巡航
 #         V_target=0.276,         # 不会被用到，随意
 #         zeta_target=-37.2,      # 不会被用到，随意
 #         f_s=0.2,                # 与参考文件 dt=5s 等价（1/5=0.2 Hz）
 #         run_data_dir=test_run_dir
 #     )
 #     print(f"\n绝对误差 = {error_score['abs_error']:.4f} m")
-#     print(f"相对误差 = {error_score['rel_error']*100:.2f} %")
+#     print(f"相对误差 = {error_score['rel_error']:.2f} %")

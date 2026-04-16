@@ -5,9 +5,12 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 
-#这个程序在Simulated_Sampling_And_Amplitude_Fitting\Single_W_A_Lagrangian_Cut.py的基础上把误差最小的30%情况单写出来，验证bayesian算法中30%截断的效果。
-#结果存储在D:\PYTHON\layout design\Analysis_A_UGstandard_Data\analysis_results_swA_lagrangian_30cut.csv
-#这个程序用于和D:\PYTHON\layout design\Bayesian_Opt\Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation.py中30%截断的结果进行对比分析。
+#这个程序是在ModelB的结论上，把30%截断的流程单独抽离出来，形成一个独立的脚本，专门用来处理30%截断的数据生成.
+#这个程序的模拟运动和采样一直是基础设置，没有四个特征值的输入
+#并且还修改了积分步长为0.05s，与Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation.py保持一致，来验证两者在不激发阈值情况下的结果是否接近。
+#与Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation.py在不激发阈值情况下跑出的结果只差0.02%
+#我认为可以当一种结果了。
+#结果存在Analysis_A_UGstandard_Data文件夹
 
 def process_30cut(
     base_data_dir="D:\\PYTHON\\layout design\\V_Wave_Data",
@@ -151,7 +154,6 @@ def process_30cut(
                 'dh_raw': dh_raw,
                 'dh': h0_corrected,
                 'true_h0': true_h0,
-                'abs_error': error_abs,
                 'error_pct': error_pct
             })
 
