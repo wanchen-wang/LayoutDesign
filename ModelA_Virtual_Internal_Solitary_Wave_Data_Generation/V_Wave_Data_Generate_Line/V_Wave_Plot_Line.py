@@ -10,6 +10,11 @@ import os
 import json
 import sys
 import argparse
+from pathlib import Path
+
+
+MODULE_DIR = Path(__file__).resolve().parents[1]
+DEFAULT_DATA_ROOT = MODULE_DIR / "V_Wave_Data_Line"
 
 
 def plot_background_stratification(T, rho, N2, z):
@@ -241,7 +246,7 @@ def plot_vertical_velocity_3d(x_grid, y_grid, z, W_Vel_3D, W, a_coef, h0, D):
     plt.show()
 
 
-def list_groups(base_dir="V_Wave_Data_Line"):
+def list_groups(base_dir=DEFAULT_DATA_ROOT):
     if not os.path.isdir(base_dir):
         return []
     items = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
@@ -261,6 +266,7 @@ def resolve_data_root(user_input=None):
     cwd = os.getcwd()
 
     candidates = [
+        str(DEFAULT_DATA_ROOT),
         os.path.join(cwd, "V_Wave_Data_Line"),
         os.path.join(script_dir, "V_Wave_Data_Line"),
         os.path.join(script_dir, "..", "V_Wave_Data_Line"),

@@ -6,10 +6,15 @@ z轴设置：海面为0，向下为正方向（0到1000米）
 import os
 import json
 import datetime
+from pathlib import Path
 
 import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import eig
+
+
+MODULE_DIR = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_LINE_DIR = MODULE_DIR / "V_Wave_Data_Line"
 
 
 # 数据保存工具
@@ -208,7 +213,7 @@ def generate_3d_straight_isw_block(z, T, W, U, c0):
 # 主程序执行函数
 # ==========================================
 
-def run_simulation(save=True, base_folder="V_Wave_Data_Line"):
+def run_simulation(save=True, base_folder=None):
     """
     执行单次模拟的主函数，并指定新的基础保存文件夹
     """
@@ -221,6 +226,8 @@ def run_simulation(save=True, base_folder="V_Wave_Data_Line"):
     
     # 4. 保存数据
     if save:
+        if base_folder is None:
+            base_folder = str(DEFAULT_V_WAVE_DATA_LINE_DIR)
         if not os.path.exists(base_folder):
             os.makedirs(base_folder)
         # 以时间戳创建子文件夹存放单次运行数据

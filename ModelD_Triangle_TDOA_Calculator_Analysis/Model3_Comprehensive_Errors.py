@@ -11,8 +11,8 @@ plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "Noto Sans CJK S
 plt.rcParams["axes.unicode_minus"] = False
 sns.set_theme(style="whitegrid", font="Microsoft YaHei", rc={"axes.unicode_minus": False})
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-CSV_PATH = Path(r"D:\PYTHON\layout design\Analysis_C_Data\TDOA_Metrics_Summary.csv")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CSV_PATH = Path(__file__).resolve().parent / "Analysis_C_Data" / "TDOA_Metrics_Summary.csv"
 
 def plot_comprehensive_dashboard():
     if not CSV_PATH.exists():

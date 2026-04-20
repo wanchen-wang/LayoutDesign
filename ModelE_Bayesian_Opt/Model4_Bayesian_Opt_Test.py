@@ -35,15 +35,26 @@ PENALTY_LOSS = 9999.0
 
 # W_C_THRESHOLD_CHOICES = [0.05, 0.10, 0.15, 0.20, 9999.0]
 # V_RATIO_CHOICES = [0.2, 0.4, 0.6, 0.8, 1.0]
-F_S_CHOICES = [0.2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.0]
+# F_S_CHOICES = [0.2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.0]
+W_C_THRESHOLD_CHOICES = [9999.0]
+ZETA_TARGET_CHOICES = [-37.2]  # Model3 固定值
+V_RATIO_CHOICES = [0.552]
+F_S_CHOICES = [0.2]
 
-W_MAE = 0.7
-W_CI = 0.3
+W_MAE = 0.5
+W_CI = 0.5
+
+# space = {
+#     "w_c_threshold": hp.uniform("w_c_threshold", 0.05, 0.5),
+#     "zeta_target": hp.uniform("zeta_target", -46.2, -19.7),
+#     "V_ratio": hp.uniform("V_ratio", 0.1, 1.0),
+#     "f_s": hp.choice("f_s", F_S_CHOICES),
+# }
 
 space = {
-    "w_c_threshold": hp.uniform("w_c_threshold", 0.05, 0.5),
-    "zeta_target": hp.uniform("zeta_target", -46.2, -19.7),
-    "V_ratio": hp.uniform("V_ratio", 0.1, 1.0),
+    "w_c_threshold": hp.choice("w_c_threshold", W_C_THRESHOLD_CHOICES),
+    "zeta_target": hp.choice("zeta_target", ZETA_TARGET_CHOICES),
+    "V_ratio": hp.choice("V_ratio", V_RATIO_CHOICES),
     "f_s": hp.choice("f_s", F_S_CHOICES),
 }
 
@@ -134,12 +145,9 @@ def prepare_data_split():
     train_pool = all_run_dirs[:100]
     test_pool = all_run_dirs[100:200]
 
-    rng_split = np.random.default_rng(DATA_SPLIT_SEED)
-    train_pick = rng_split.choice(100, size=TRAIN_SAMPLE_SIZE, replace=False)
-    test_pick = rng_split.choice(100, size=TEST_SAMPLE_SIZE, replace=False)
-
-    train_dirs_local = [train_pool[i] for i in sorted(train_pick)]
-    test_dirs_local = [test_pool[i] for i in sorted(test_pick)]
+    # 严格取前100组的前30组作为训练集，后100组的前30组作为测试集（不使用随机抽样）
+    train_dirs_local = train_pool[:TRAIN_SAMPLE_SIZE]
+    test_dirs_local = test_pool[:TEST_SAMPLE_SIZE]
     return train_dirs_local, test_dirs_local
 
 
@@ -155,9 +163,9 @@ def build_history_dataframe(trials):
         w_mae = float(result.get("w_MAE", W_MAE))
         w_ci = float(result.get("w_CI", W_CI))
 
-        w_c_threshold = float(vals["w_c_threshold"][0])
-        zeta_target = float(vals["zeta_target"][0])
-        v_ratio = float(vals["V_ratio"][0])
+        w_c_threshold = _decode_choice_value(vals["w_c_threshold"][0], W_C_THRESHOLD_CHOICES)
+        zeta_target = _decode_choice_value(vals["zeta_target"][0], ZETA_TARGET_CHOICES)
+        v_ratio = _decode_choice_value(vals["V_ratio"][0], V_RATIO_CHOICES)
         f_s = _decode_choice_value(vals["f_s"][0], F_S_CHOICES)
         v_target = _calc_v_target(zeta_target, v_ratio)
 
@@ -199,6 +207,9 @@ def _load_trials_from_history_csv(csv_path):
 
         w_c_val = float(row["w_c_threshold"])  # 直接取数值
         v_ratio_val = float(row["V_ratio"])    # 直接取数值
+        w_c_idx = _value_to_choice_idx(row["w_c_threshold"], W_C_THRESHOLD_CHOICES)
+        zeta_idx = _value_to_choice_idx(row["zeta_target"], ZETA_TARGET_CHOICES)
+        v_ratio_idx = _value_to_choice_idx(row["V_ratio"], V_RATIO_CHOICES)
         f_s_idx = _value_to_choice_idx(row["f_s"], F_S_CHOICES)
 
         docs.append(
@@ -225,9 +236,9 @@ def _load_trials_from_history_csv(csv_path):
                         "f_s": [int(i)],
                     },
                     "vals": {
-                        "w_c_threshold": [w_c_val],       # 改为刚才定义的数值变量
-                        "zeta_target": [float(row["zeta_target"])],
-                        "V_ratio": [v_ratio_val],         # 改为刚才定义的数值变量
+                        "w_c_threshold": [w_c_idx],
+                        "zeta_target": [zeta_idx],
+                        "V_ratio": [v_ratio_idx],
                         "f_s": [f_s_idx],
                     },
                 },

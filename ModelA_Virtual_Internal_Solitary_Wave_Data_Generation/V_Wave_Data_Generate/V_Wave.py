@@ -6,10 +6,15 @@ z轴设置：海面为0，向下为正方向（0到1000米）
 import os
 import json
 import datetime
+from pathlib import Path
 
 import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import eig
+
+
+MODULE_DIR = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_DIR = MODULE_DIR / "V_Wave_Data"
 
 
 # 数据保存工具
@@ -265,7 +270,7 @@ def run_simulation(save=True):
 
     run_directory = None
     if save:
-        base_output = os.path.join(os.getcwd(), 'V_Wave_Data')
+        base_output = str(DEFAULT_V_WAVE_DATA_DIR)
         run_directory = save_run_data(base_output, z, T, rho, N2, W, U, c0,
                                       x_grid, y_grid, T_3D, W_Vel_3D,
                                       h0, Ly, a_coef, D)
@@ -275,4 +280,3 @@ def run_simulation(save=True):
         print(f"xz 剖面 CSV 文件已生成：{os.path.join(run_directory, 'xz_temp.csv')} 和 xz_vel.csv")
 
     return run_directory
-

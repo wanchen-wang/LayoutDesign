@@ -17,6 +17,7 @@ Available methods:
 import os
 import sys
 import pandas as pd
+from pathlib import Path
 
 # ensure current directory is on path so that we can import local modules
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
@@ -25,7 +26,12 @@ from Single_W_A import run_single as run_single_swA
 from Single_W_A_Lagrangian import run_single as run_single_lagrangian
 
 
-def list_groups(base_dir="D:\\PYTHON\\layout design\\V_Wave_Data"):
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
+DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Analysis_Results_SwA_Lagrangian_Cut_Data"
+
+
+def list_groups(base_dir=DEFAULT_V_WAVE_DATA_DIR):
     if not os.path.isdir(base_dir):
         return []
     items = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
@@ -33,7 +39,7 @@ def list_groups(base_dir="D:\\PYTHON\\layout design\\V_Wave_Data"):
     return items
 
 
-def execute_range(start_idx=1, end_idx=1, method='single_w_A', base_dir="D:\\PYTHON\\layout design\\V_Wave_Data", output_file=None):
+def execute_range(start_idx=1, end_idx=1, method='single_w_A', base_dir=DEFAULT_V_WAVE_DATA_DIR, output_file=None):
     """
     Execute batch analysis over a range of data groups.
     
@@ -53,9 +59,9 @@ def execute_range(start_idx=1, end_idx=1, method='single_w_A', base_dir="D:\\PYT
     # Auto-generate output filename if not provided
     if output_file is None:
         if method == 'Single_W_A':
-            output_file = "D:\\PYTHON\\layout design\\Analysis_Results_SwA_Lagrangian_Cut_Data\\analysis_results_swA.csv"
+            output_file = DEFAULT_RESULTS_DIR / "analysis_results_swA.csv"
         elif method == 'Single_W_A_Lagrangian':
-            output_file = "D:\\PYTHON\\layout design\\Analysis_Results_SwA_Lagrangian_Cut_Data\\analysis_results_swA_lagrangian_0cut.csv"
+            output_file = DEFAULT_RESULTS_DIR / "analysis_results_swA_lagrangian_0cut.csv"
         else:
             output_file = f"analysis_results_{method}.csv"
     
@@ -127,6 +133,9 @@ def execute_range(start_idx=1, end_idx=1, method='single_w_A', base_dir="D:\\PYT
         else:
             df_combined = df_new
         
+        output_dir = os.path.dirname(output_file)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         df_combined.to_csv(output_file, index=False)
         print(f"\n结果已保存到 {output_file}")
     else:

@@ -6,6 +6,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
+from pathlib import Path
+
+# ◆◆◆ 导入优化计算模块的核心函数
+from Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation import process_30cut
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -26,177 +33,12 @@ def _annotate_point(ax, x, y, text, dx, dy, color="black", fontsize=8):
     )
 
 
-def list_groups(base_dir=r"D:\PYTHON\layout design\V_Wave_Data"):
+def list_groups(base_dir=DEFAULT_V_WAVE_DATA_DIR):
     if not os.path.isdir(base_dir):
         return []
     items = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
     items.sort()
     return items
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Core simulation (mirrors process_30cut but returns full diagnostic data)
-# ─────────────────────────────────────────────────────────────────────────────
-
-def run_30cut_detailed(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
-    """
-    与 process_30cut 逻辑完全相同，但返回完整诊断字典用于可视化。
-    """
-    # ── 参数读取 ──────────────────────────────────────────────────────────────
-    with open(os.path.join(run_data_dir, 'params.json'), 'r') as f:
-        params = json.load(f)
-    Delta_Z_true      = params.get('h0', 105.0)
-    Cp                = params.get('c0')
-    thermocline_depth = params.get('thermocline_depth')
-    D                 = params.get('D', 1000.0)
-
-    # ── 流场加载 ──────────────────────────────────────────────────────────────
-    x_grid    = np.load(os.path.join(run_data_dir, 'x_grid.npy'))
-    y_grid    = np.load(os.path.join(run_data_dir, 'y_grid.npy'))
-    z_grid    = np.load(os.path.join(run_data_dir, 'z.npy'))
-    W_Vel_3D  = np.load(os.path.join(run_data_dir, 'W_Vel_3D.npy'))
-    W_profile = np.load(os.path.join(run_data_dir, 'W_profile.npy'))
-
-    if z_grid[0] > z_grid[-1]:
-        z_grid    = np.flip(z_grid)
-        W_Vel_3D  = np.flip(W_Vel_3D, axis=2)
-        W_profile = np.flip(W_profile)
-
-    interpolator_w = RegularGridInterpolator(
-        (x_grid, y_grid, z_grid), W_Vel_3D, bounds_error=False, fill_value=0.0
-    )
-    y_center = 0.0
-
-    def get_flow(X, Z):
-        w_c = interpolator_w([[X, y_center, Z]])[0]
-        return float(w_c)
-
-    # ── 反算初始位置 ──────────────────────────────────────────────────────────
-    dt    = 0.05
-    v_g   = 0.22
-    V_rel = Cp + v_g
-    t_meet = thermocline_depth * (6000.0 / 1000.0)
-    x_init = (v_g + Cp) * t_meet
-
-    half_window_time = max(4000.0, (8.0 * D) / V_rel)
-    start_time = max(0.0, t_meet - half_window_time)
-    end_time   = t_meet + half_window_time
-
-    X = v_g * start_time - (x_init - Cp * start_time)
-    X = float(np.clip(X, x_grid[0], x_grid[-1]))
-
-    t_mod_start = start_time % 12000.0
-    if t_mod_start < 6000.0:
-        Z = t_mod_start * 1000.0 / 6000.0
-    else:
-        Z = 1000.0 - (t_mod_start - 6000.0) * 1000.0 / 6000.0
-    Z = float(np.clip(Z, z_grid[0], z_grid[-1]))
-    t = start_time
-
-    w_stdy_norm = 1000.0 / 6000.0
-    V_norm      = float(np.hypot(v_g, w_stdy_norm))
-    zeta_norm   = float(np.degrees(np.arcsin(-w_stdy_norm / V_norm)))
-    f_norm      = 0.2
-
-    sampled_data      = []
-    time_since_sample = 0.0
-
-    # ── 拉格朗日主循环 ────────────────────────────────────────────────────────
-    while t < end_time:
-        x_g            = v_g * t
-        X_wave_current = x_init - Cp * t
-        x_eff          = x_g - X_wave_current
-
-        w_c = get_flow(x_eff, Z)
-
-        if abs(w_c) >= w_c_threshold:
-            current_V    = V_target
-            current_zeta = zeta_target
-            current_fs   = f_s
-        else:
-            current_V    = V_norm
-            current_zeta = zeta_norm
-            current_fs   = f_norm
-
-        zeta_rad = np.radians(current_zeta)
-        w_g      = -current_V * np.sin(zeta_rad)
-        # W_Vel_3D 中 w_c 向上为正，Z 轴向下为正，故减去
-        w_abs    = w_g - w_c
-
-        X += v_g * dt
-        Z += w_abs * dt
-        Z  = float(np.clip(Z, 0.0, 1000.0))
-        t += dt
-
-        interval           = 1.0 / current_fs
-        time_since_sample += dt
-        if time_since_sample >= interval:
-            sampled_data.append({'Time': t, 'Z': Z, 'w_c': w_c, 'f_s': current_fs})
-            time_since_sample -= interval
-
-    # ── 30% 截断评估 ──────────────────────────────────────────────────────────
-    df = pd.DataFrame(sampled_data)
-    if df.empty:
-        raise RuntimeError("仿真轨迹为空，请检查初始参数或流场数据。")
-
-    # 只找正向峰値（与参考程序一致）
-    w_series   = df['w_c']
-    idx_max    = w_series.idxmax()
-    w_max      = float(w_series.iloc[idx_max])
-
-    if w_max <= 0:
-        raise RuntimeError("未检测到上涌正向波办，请检查参数。")
-
-    cutoff_val = 0.30 * w_max
-
-    left_side   = w_series.iloc[:idx_max + 1]
-    valid_left  = left_side[left_side > cutoff_val]
-    idx_start   = int(valid_left.index[0])  if not valid_left.empty  else int(idx_max)
-
-    right_side  = w_series.iloc[idx_max:]
-    valid_right = right_side[right_side > cutoff_val]
-    idx_end     = int(valid_right.index[-1]) if not valid_right.empty else int(idx_max)
-
-    df_cut     = df.loc[idx_start:idx_end].copy()
-    t_integral = df_cut['Time'].values
-    w_integral = df_cut['w_c'].values
-    dh_raw     = np.trapezoid(w_integral, x=t_integral)
-
-    z_idx      = np.argmin(np.abs(z_grid - thermocline_depth))
-    W_z_meet   = float(W_profile[z_idx])
-    doppler_factor = V_rel / Cp
-    Delta_Z_calc   = abs(dh_raw * doppler_factor / W_z_meet)
-    J              = abs(Delta_Z_calc - Delta_Z_true)
-
-    print(f"[*] {os.path.basename(run_data_dir)} | |w_max|={w_max:.3f}m/s | "
-          f"dh_raw={dh_raw:.2f}m·s | doppler={doppler_factor:.3f} | "
-          f"W_z_meet={W_z_meet:.4f} | 推算振幅={Delta_Z_calc:.2f}m | "
-          f"真实={Delta_Z_true}m | J={J:.4f}")
-
-    return {
-        "params":          params,
-        "df":              df,
-        "idx_max":         idx_max,
-        "w_max":           w_max,
-        "cutoff_val":      cutoff_val,
-        "idx_start":       idx_start,
-        "idx_end":         idx_end,
-        "t_integral":      t_integral,
-        "w_integral":      w_integral,
-        "dh_raw":          dh_raw,
-        "Delta_Z_calc":    Delta_Z_calc,
-        "Delta_Z_true":    Delta_Z_true,
-        "J":               J,
-        "doppler_factor":  doppler_factor,
-        "W_z_meet":        W_z_meet,
-        "thermocline_depth": thermocline_depth,
-        "w_c_threshold":   w_c_threshold,
-        "V_target":        V_target,
-        "zeta_target":     zeta_target,
-        "f_s":             f_s,
-        "V_norm":          V_norm,
-        "zeta_norm":       zeta_norm,
-    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -358,7 +200,7 @@ def plot_30cut_result(result, group_name):
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    base_dir = r"D:\PYTHON\layout design\V_Wave_Data"
+    base_dir = DEFAULT_V_WAVE_DATA_DIR
     groups   = list_groups(base_dir)
 
     if not groups:
@@ -398,7 +240,9 @@ if __name__ == "__main__":
 
     print(f"\n正在运行仿真: {group_name} ...")
     try:
-        result = run_30cut_detailed(w_c_threshold, V_target, zeta_target, f_s, group_path)
+        # ◆◆◆ 调用优化计算模块，传递 return_diagnostic_data=True 获取完整诊断数据用于绘图
+        result = process_30cut(w_c_threshold, V_target, zeta_target, f_s, group_path, 
+                               return_diagnostic_data=True)
         plot_30cut_result(result, group_name)
     except Exception as exc:
         print(f"运行失败: {exc}")

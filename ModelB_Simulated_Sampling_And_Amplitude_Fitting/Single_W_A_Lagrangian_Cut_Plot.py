@@ -1,10 +1,15 @@
 import json
 import os
 import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
 
 
 def _annotate_point(ax, x, y, text, dx, dy, color="black", fontsize=8):
@@ -23,7 +28,7 @@ def _annotate_point(ax, x, y, text, dx, dy, color="black", fontsize=8):
     )
 
 
-def list_groups(base_dir="D:\\PYTHON\\layout design\\V_Wave_Data"):
+def list_groups(base_dir=DEFAULT_V_WAVE_DATA_DIR):
     """List all available wave-data subdirectories."""
     if not os.path.isdir(base_dir):
         return []
@@ -296,7 +301,7 @@ def plot_cut_result(result, cut_pct, group_name):
 
 
 if __name__ == "__main__":
-    base_dir = "D:\\PYTHON\\layout design\\V_Wave_Data"
+    base_dir = DEFAULT_V_WAVE_DATA_DIR
     groups = list_groups(base_dir)
 
     if not groups:

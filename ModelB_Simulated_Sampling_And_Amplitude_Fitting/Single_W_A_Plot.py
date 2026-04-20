@@ -7,11 +7,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
+from pathlib import Path
 
 # ensure current directory is on path so that we can import local modules
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from Single_W_A import run_single
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
 
 
 def _annotate_point(ax, x, y, text, dx, dy, color='black', fontsize=8):
@@ -170,7 +175,7 @@ def plot_lagrangian_sampling(t_array, w_isw_array, w_obs_array, depth_obs, t_int
     plt.show()
 
 
-def list_groups(base_dir="D:\\PYTHON\\layout design\\V_Wave_Data"):
+def list_groups(base_dir=DEFAULT_V_WAVE_DATA_DIR):
     """
     列出所有可用的数据组（目录）
     """
@@ -182,7 +187,7 @@ def list_groups(base_dir="D:\\PYTHON\\layout design\\V_Wave_Data"):
 
 
 if __name__ == "__main__":
-    base_dir = "D:\\PYTHON\\layout design\\V_Wave_Data"
+    base_dir = DEFAULT_V_WAVE_DATA_DIR
     groups = list_groups(base_dir)
     total = len(groups)
 

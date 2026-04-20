@@ -2,9 +2,12 @@ import pandas as pd
 import glob
 import os
 from tabulate import tabulate
+from pathlib import Path
+
+# 读取 Model4优化参数 的 loss 数据，找到 loss 最小的 10 条记录，并进行对比分析
 
 # 指定目录路径
-data_dir = r"D:\PYTHON\layout design\Analysis_A_Bayesian_Opt"
+data_dir = Path(__file__).resolve().parent / "Analysis_Bayesian_Opt_Model4_Data"
 
 # 读取所有 CSV 文件
 csv_files = glob.glob(os.path.join(data_dir, "*.csv"))
@@ -56,7 +59,9 @@ for col in full_df_formatted.columns:
 print(tabulate(full_df_formatted, headers='keys', tablefmt='grid', showindex=False))
 
 # 导出到 Excel
-output_file = os.path.join(data_dir, "Top_10_Min_Loss.xlsx")
+output_dir = Path(__file__).resolve().parent / "Analysis_Bayesian_Opt_Model5_Data"
+output_dir.mkdir(exist_ok=True)
+output_file = output_dir / "model5_Top_10_Min_Loss.xlsx"
 with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
     top_10_min_loss.to_excel(writer, index=False, sheet_name='Top_10_Min_Loss')
     

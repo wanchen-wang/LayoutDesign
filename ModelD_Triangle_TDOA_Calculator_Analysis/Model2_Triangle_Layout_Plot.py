@@ -16,10 +16,11 @@ plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "Noto Sans CJK S
 plt.rcParams["axes.unicode_minus"] = False
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-ANALYSIS_DIR = PROJECT_ROOT / "Analysis_C_Data"
-WAVE_DATA_DIR = PROJECT_ROOT / "V_Wave_Data_Line"
+MODULE_DIR = Path(__file__).resolve().parent
+ANALYSIS_DIR = MODULE_DIR / "Analysis_C_Data"
+WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data_Line"
 CSV_PATH = ANALYSIS_DIR / "TDOA_Metrics_Summary.csv"
-OUTPUT_PIC_DIR = PROJECT_ROOT / "Pic_New"  # 新图表输出目录
+OUTPUT_PIC_DIR = PROJECT_ROOT / "Pic" / "c_theta"
 
 NODE_COLORS = {1: "#d1495b", 2: "#2b59c3", 3: "#2a9d8f"}
 
@@ -275,7 +276,9 @@ def main():
     traj_rel_path = selected_run['trajectory_file']
 
     # —— 定位并读取 .npz 和 params.json
-    npz_path    = PROJECT_ROOT / traj_rel_path
+    npz_path = Path(traj_rel_path)
+    if not npz_path.is_absolute():
+        npz_path = MODULE_DIR / npz_path
     params_path = WAVE_DATA_DIR / wave_id / "params.json"
 
     if not npz_path.exists() or not params_path.exists():

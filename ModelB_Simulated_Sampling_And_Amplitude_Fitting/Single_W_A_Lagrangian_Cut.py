@@ -3,6 +3,12 @@ import json
 import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
+DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Analysis_Results_SwA_Lagrangian_Cut_Data"
 
 
 def _normalize_threshold_list(cut_percentages=None, min_pct=1, max_pct=40):
@@ -19,7 +25,7 @@ def _normalize_threshold_list(cut_percentages=None, min_pct=1, max_pct=40):
 
 
 def batch_process_multiple_thresholds(
-    base_data_dir="D:\\PYTHON\\layout design\\V_Wave_Data",
+    base_data_dir=DEFAULT_V_WAVE_DATA_DIR,
     cut_percentages=None,
     min_pct=1,
     max_pct=40,
@@ -54,7 +60,7 @@ def batch_process_multiple_thresholds(
         pct = pct_int / 100.0  # 将 1 转换为 0.01
         
         # 检测文件是否已存在，若存在则跳过该阈值
-        output_filename = f"D:\\PYTHON\\layout design\\Analysis_Results_SwA_Lagrangian_Cut_Data\\analysis_results_swA_lagrangian_{pct_int}cut.csv"
+        output_filename = DEFAULT_RESULTS_DIR / f"analysis_results_swA_lagrangian_{pct_int}cut.csv"
         if os.path.exists(output_filename):
             print(f"⏭️  跳过截断阈值: {pct_int}% ({output_filename} 已存在)")
             continue
@@ -184,7 +190,8 @@ def batch_process_multiple_thresholds(
             # 添加局部误差密度指标用于后续深度分析
             df['error_density'] = df['error_pct'] / df['duration']
             
-            output_filename = f"D:\\PYTHON\\layout design\\Analysis_Results_SwA_Lagrangian_Cut_Data\\analysis_results_swA_lagrangian_{pct_int}cut.csv"
+            os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
+            output_filename = DEFAULT_RESULTS_DIR / f"analysis_results_swA_lagrangian_{pct_int}cut.csv"
             df.to_csv(output_filename, index=False)
             print(f"   ✅ 成功保存: {output_filename} (包含 {len(df)} 组观测数据，平均误差: {df['error_pct'].mean():.2f}%)")
 

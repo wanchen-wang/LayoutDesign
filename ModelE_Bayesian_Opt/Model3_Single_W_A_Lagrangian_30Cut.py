@@ -4,16 +4,23 @@ import json
 import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MODULE_DIR = Path(__file__).resolve().parent
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
+MODEL3_COMPARISON_DIR = MODULE_DIR / "Analysis_Bayesian_Opt_Model3_Comparison_Data"
 
 #这个程序是在ModelB的结论上，把30%截断的流程单独抽离出来，形成一个独立的脚本，专门用来处理30%截断的数据生成.
 #这个程序的模拟运动和采样一直是基础设置，没有四个特征值的输入
 #并且还修改了积分步长为0.05s，与Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation.py保持一致，来验证两者在不激发阈值情况下的结果是否接近。
 #与Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation.py在不激发阈值情况下跑出的结果只差0.02%
 #我认为可以当一种结果了。
-#结果存在Analysis_A_UGstandard_Data文件夹
+#结果存在 Analysis_Bayesian_Opt_Model3_Comparison_Data 文件夹
 
 def process_30cut(
-    base_data_dir="D:\\PYTHON\\layout design\\V_Wave_Data",
+    base_data_dir=DEFAULT_V_WAVE_DATA_DIR,
 ):
     pct_int = 30
     pct = 0.30
@@ -166,7 +173,7 @@ def process_30cut(
         # 添加局部误差密度指标用于后续深度分析
         df['error_density'] = df['error_pct'] / df['duration']
 
-        output_dir = "D:\\PYTHON\\layout design\\Analysis_A_UGstandard_Data"
+        output_dir = MODEL3_COMPARISON_DIR
         os.makedirs(output_dir, exist_ok=True)
         output_filename = os.path.join(output_dir, f"analysis_results_swA_lagrangian_{pct_int}cut_dt0.05.csv")
         df.to_csv(output_filename, index=False)

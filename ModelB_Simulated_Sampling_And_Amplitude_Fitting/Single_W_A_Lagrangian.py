@@ -2,6 +2,11 @@ import os
 import json
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
 
 
 def run_single(data_dir):
@@ -159,7 +164,7 @@ def run_single(data_dir):
 
 if __name__ == "__main__":
     # simple demo using first directory
-    base = "V_Wave_Data"
+    base = DEFAULT_V_WAVE_DATA_DIR
     if os.path.isdir(base):
         dirs = sorted(os.listdir(base))
         if dirs:

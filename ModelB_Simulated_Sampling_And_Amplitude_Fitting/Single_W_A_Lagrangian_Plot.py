@@ -2,11 +2,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import sys
+from pathlib import Path
 
 # ensure current directory is on path so that we can import local modules
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from Single_W_A_Lagrangian import run_single
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
 
 
 def _annotate_point(ax, x, y, text, dx, dy, color='black', fontsize=8):
@@ -164,7 +169,7 @@ def plot_lagrangian_sampling(t_array, w_isw_array, w_obs_array, depth_obs, t_int
     plt.show()
 
 
-def list_groups(base_dir="D:\\PYTHON\\layout design\\V_Wave_Data"):
+def list_groups(base_dir=DEFAULT_V_WAVE_DATA_DIR):
     """
     列出所有可用的数据组（目录）
     """
@@ -200,7 +205,7 @@ if __name__ == "__main__":
             print("请输入有效的数字")
 
     selected_group = groups[idx]
-    path = os.path.join("D:\\PYTHON\\layout design\\V_Wave_Data", selected_group)
+    path = os.path.join(DEFAULT_V_WAVE_DATA_DIR, selected_group)
     print(f"正在分析数据组: {selected_group}")
 
     try:

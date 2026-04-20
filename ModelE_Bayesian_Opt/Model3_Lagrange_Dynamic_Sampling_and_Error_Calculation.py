@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import RegularGridInterpolator
 #这个函数的结构在Model3的运动采样模拟流程图.md里
-def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
+def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir, return_diagnostic_data=False):
     """
     流场读取插值 + 动态拉格朗日仿真采样 + 30%截断误差评估
     :param w_c_threshold: 触发高频机动采样模式的海水垂直流速阈值 (m/s)
@@ -12,7 +12,10 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
     :param zeta_target: 目标滑翔轨迹角 (度，下潜为负)
     :param f_s: 目标采样频率 (Hz)
     :param run_data_dir: V_Wave_Data 生成的具体时间戳文件夹路径 (如 .../20260310_145055)
-    :return: J (本次观测策略的绝对积分误差)
+    :param return_diagnostic_data: 是否返回完整诊断数据（用于绘图）。False=轻量级（优化用），True=完整（绘图用）
+    :return: 
+        - False: 字典，仅含误差指标
+        - True: 字典，含完整诊断数据（df, 索引, 参数等）
     """
     # =====================================================================
     # 1. 基于 V_Wave_Data 结构的真实流场数据读取与插值器构建
@@ -185,6 +188,15 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
     abs_error       = J
     rel_error       = abs_error / Delta_Z_true * 100 if Delta_Z_true != 0 else float('inf')
     
+    # ── 轻量级返回（用于贝叶斯优化，快速、占用内存少）
+    if not return_diagnostic_data:
+        return {
+            'J':            J,
+            'abs_error':    abs_error,
+            'rel_error':    rel_error,
+        }
+    
+    # ── 完整诊断返回（用于绘图，包含所有中间结果）
     return {
         'J':            J,
         'abs_error':    abs_error,
@@ -195,12 +207,28 @@ def process_30cut(w_c_threshold, V_target, zeta_target, f_s, run_data_dir):
         'dh_raw':       dh_raw,
         'doppler_factor': doppler_factor,
         'W_z_meet':     W_z_meet,
+        # ─── 绘图诊断数据 ──────────────────────────────────────────
+        'df':                  df,           # 完整时间序列 DataFrame
+        'idx_max':             idx_max,      # 峰值索引
+        'idx_start':           idx_start,    # 截断起点索引
+        'idx_end':             idx_end,      # 截断终点索引
+        'cutoff_val':          cutoff_val,   # 30% 阈值
+        't_integral':          t_integral,   # 积分区间时间
+        'w_integral':          w_integral,   # 积分区间流速
+        'thermocline_depth':   thermocline_depth,
+        'V_norm':              V_norm,
+        'zeta_norm':           zeta_norm,
+        'w_c_threshold':       w_c_threshold,
+        'V_target':            V_target,
+        'zeta_target':         zeta_target,
+        'f_s':                 f_s,
+        'params':              params,
     }
 
 # ================= 测试调用示例 =================
 # if __name__ == "__main__":
 #     # 指定您图片中展示的生成文件夹路径
-#     test_run_dir = r"D:\PYTHON\layout design\V_Wave_Data\20260310_145055"
+#     test_run_dir = r"...\\ModelA_Virtual_Internal_Solitary_Wave_Data_Generation\\V_Wave_Data\\20260310_145055"
     
 #     # 将优化器的四参数直接投喂给评估函数
 #     error_score = process_30cut(

@@ -3,11 +3,14 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
 
 PENALTY_LOSS = 9999.0
 WC_NO_TRIGGER = 9999.0
-DEFAULT_ANALYSIS_DIR = r"D:\PYTHON\layout design\Analysis_A_Bayesian_Opt"
-DEFAULT_PIC_DIR = r"D:\PYTHON\layout design\Pic\Bayesian_opt"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MODULE_DIR = Path(__file__).resolve().parent
+DEFAULT_ANALYSIS_DIR = MODULE_DIR / "Analysis_Bayesian_Opt_Model4_Data"
+DEFAULT_PIC_DIR = PROJECT_ROOT / "Pic" / "Bayesian_opt"
 HISTORY_CSV_NAME = "model4_bayesopt_history_Continuous_4.csv"
 OUTPUT_PNG_NAME = "model4_metrics_vs_5features_Continuous_4.png"
 TIME_LOSS_PNG_NAME = "model4_loss_vs_eval_Continuous_4.png"
