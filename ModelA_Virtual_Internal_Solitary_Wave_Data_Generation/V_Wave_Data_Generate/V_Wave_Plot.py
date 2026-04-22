@@ -6,6 +6,7 @@ v_wave.py 绘图模块
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.colors import CenteredNorm
 import os
 import json
 import sys
@@ -14,7 +15,7 @@ from pathlib import Path
 
 
 MODULE_DIR = Path(__file__).resolve().parents[1]
-DEFAULT_DATA_ROOT = MODULE_DIR / "V_Wave_Data"
+DEFAULT_DATA_ROOT = MODULE_DIR / "V_Wave_Data_Hor"
 
 
 def plot_background_stratification(T, rho, N2, z):
@@ -157,55 +158,51 @@ def plot_multiple_3d_isotherm_surfaces(x, y, z, W, a_coef, h0, D, Ly, T_3D):
     plt.show()
 
 
-def plot_vertical_velocity_2d(x_grid, z, W_Vel_3D, y_center_idx, a_coef, D, h0):
+def plot_vertical_velocity_2d(x_grid, z, W_Vel_3D, y_center_idx, a_coef, D, h0, thermocline_depth):
     """
     绘制垂直流速的二维图，并叠加波形轮廓
     """
-    # 提取Y轴中心的垂直流速切片
     W_Vel_xz = W_Vel_3D[:, y_center_idx, :]
-    
-    # 计算波形轮廓（用于叠加显示）
+
     x_center = len(x_grid) // 2
-    x_relative = x_grid - x_grid[x_center]  # 相对于波峰中心的位置
+    x_relative = x_grid - x_grid[x_center]
     sech2_wave = (1.0 / np.cosh(x_relative / D))**2
-    wave_profile = h0 * sech2_wave  # 波形轮廓
-    
-    # 找到最大垂直流速所在的深度
+    wave_profile = h0 * sech2_wave
+
     max_vel_idx_2d = np.unravel_index(np.argmax(np.abs(W_Vel_xz)), W_Vel_xz.shape)
-    max_vel_depth = z[max_vel_idx_2d[1]]  # 第二个维度是深度
-    
+    max_vel_depth = z[max_vel_idx_2d[1]]
+
+    vel_max = np.max(np.abs(W_Vel_xz))
+    norm = CenteredNorm(0, halfrange=vel_max)
+
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-    
-    # 左图：垂直流速的等值线图
-    c1 = ax1.contourf(x_grid/1000, z, W_Vel_xz.T, levels=30, cmap='RdBu_r')
-    ax1.contour(x_grid/1000, z, W_Vel_xz.T, levels=15, colors='k', linewidths=0.5, alpha=0.3)
+
+    c1 = ax1.contourf(x_grid/1000, z, W_Vel_xz.T, levels=30, cmap='bwr', norm=norm)
+    ax1.contour(x_grid/1000, z, W_Vel_xz.T, levels=15, colors='k', linewidths=0.5, alpha=0.3, norm=norm)
     fig.colorbar(c1, ax=ax1, label='Vertical Velocity (m/s)')
     ax1.set_title("Vertical Velocity Field (x-z plane)")
     ax1.set_xlabel("Propagation Distance x (km)")
     ax1.set_ylabel("Depth z (m)")
-    ax1.set_ylim(1000, 0)  # 1000在最下面，0在最上面
+    ax1.set_ylim(1000, 0)
     ax1.grid(True, alpha=0.3)
-    
-    # 右图：垂直流速 + 叠加波形轮廓
-    c2 = ax2.contourf(x_grid/1000, z, W_Vel_xz.T, levels=30, cmap='RdBu_r')
-    ax2.contour(x_grid/1000, z, W_Vel_xz.T, levels=15, colors='k', linewidths=0.5, alpha=0.3)
-    
-    # 叠加波形轮廓（在最大流速深度处）
-    # 将波形轮廓叠加在最大流速深度附近
-    wave_depth = max_vel_depth
-    wave_y = wave_depth + wave_profile  # 波形轮廓在深度方向的位置
-    
+
+    c2 = ax2.contourf(x_grid/1000, z, W_Vel_xz.T, levels=30, cmap='bwr', norm=norm)
+    ax2.contour(x_grid/1000, z, W_Vel_xz.T, levels=15, colors='k', linewidths=0.5, alpha=0.3, norm=norm)
+
+    wave_depth = thermocline_depth
+    wave_y = wave_depth + wave_profile
+
     ax2.plot(x_grid/1000, wave_y, 'k-', linewidth=3, label='Wave Profile', alpha=0.8)
     ax2.fill_between(x_grid/1000, wave_depth, wave_y, alpha=0.3, color='yellow', label='Wave Displacement')
-    
+
     fig.colorbar(c2, ax=ax2, label='Vertical Velocity (m/s)')
     ax2.set_title(f"Vertical Velocity + Wave Profile\nMax velocity at depth {max_vel_depth:.0f}m")
     ax2.set_xlabel("Propagation Distance x (km)")
     ax2.set_ylabel("Depth z (m)")
-    ax2.set_ylim(1000, 0)  # 1000在最下面，0在最上面
+    ax2.set_ylim(1000, 0)
     ax2.legend(loc='upper right')
     ax2.grid(True, alpha=0.3)
-    
+
     plt.tight_layout()
     plt.show()
 
@@ -214,34 +211,82 @@ def plot_vertical_velocity_3d(x_grid, y_grid, z, W_Vel_3D, W, a_coef, h0, D):
     """
     绘制垂直流速的三维图
     """
-    # 找到最大垂直流速所在的深度索引
     max_vel_idx = np.unravel_index(np.argmax(np.abs(W_Vel_3D)), W_Vel_3D.shape)
     max_vel_depth_idx = max_vel_idx[2]
     max_vel_depth = z[max_vel_depth_idx]
-    
-    # 提取该深度的垂直流速切片
+
     W_Vel_xy = W_Vel_3D[:, :, max_vel_depth_idx]
-    
-    # 构建 2D 水平网格
+
     X_2D, Y_2D = np.meshgrid(x_grid, y_grid, indexing='ij')
-    
+
+    vel_max = np.max(np.abs(W_Vel_xy))
+    norm = CenteredNorm(0, halfrange=vel_max)
+
     fig = plt.figure(figsize=(14, 10))
     ax = fig.add_subplot(111, projection='3d')
-    
-    # 绘制垂直流速的3D表面
-    surf = ax.plot_surface(X_2D/1000, Y_2D/1000, W_Vel_xy, 
-                           cmap='RdBu_r', edgecolor='none', alpha=0.9, antialiased=True)
-    
+
+    surf = ax.plot_surface(X_2D/1000, Y_2D/1000, W_Vel_xy,
+                           cmap='bwr', edgecolor='none', alpha=0.9, antialiased=True, norm=norm)
+
     ax.view_init(elev=35, azim=-60)
-    
-    ax.set_title(f"3D Vertical Velocity Field\nAt depth {max_vel_depth:.0f}m (max velocity depth)", 
+
+    ax.set_title(f"3D Vertical Velocity Field\nAt depth {max_vel_depth:.0f}m (max velocity depth)",
                  fontsize=14, pad=20)
     ax.set_xlabel("Propagation Distance x (km)", labelpad=10)
     ax.set_ylabel("Along-Crest Distance y (km)", labelpad=10)
     ax.set_zlabel("Vertical Velocity (m/s)", labelpad=10)
-    
+
     fig.colorbar(surf, ax=ax, shrink=0.5, aspect=10, label='Vertical Velocity (m/s)', pad=0.1)
-    
+
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_horizontal_velocity_2d(x_grid, z, U_Vel_3D, y_center_idx, a_coef, D, h0, thermocline_depth):
+    """
+    绘制水平流速的二维图，并叠加波形轮廓
+    """
+    U_Vel_xz = U_Vel_3D[:, y_center_idx, :]
+
+    x_center = len(x_grid) // 2
+    x_relative = x_grid - x_grid[x_center]
+    sech2_wave = (1.0 / np.cosh(x_relative / D))**2
+    wave_profile = h0 * sech2_wave
+
+    max_vel_idx_2d = np.unravel_index(np.argmax(np.abs(U_Vel_xz)), U_Vel_xz.shape)
+    max_vel_depth = z[max_vel_idx_2d[1]]
+
+    vel_max = np.max(np.abs(U_Vel_xz))
+    norm = CenteredNorm(0, halfrange=vel_max)
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+    c1 = ax1.contourf(x_grid/1000, z, U_Vel_xz.T, levels=30, cmap='bwr', norm=norm)
+    ax1.contour(x_grid/1000, z, U_Vel_xz.T, levels=15, colors='k', linewidths=0.5, alpha=0.3, norm=norm)
+    fig.colorbar(c1, ax=ax1, label='Horizontal Velocity (m/s)')
+    ax1.set_title("Horizontal Velocity Field (x-z plane)")
+    ax1.set_xlabel("Propagation Distance x (km)")
+    ax1.set_ylabel("Depth z (m)")
+    ax1.set_ylim(1000, 0)
+    ax1.grid(True, alpha=0.3)
+
+    c2 = ax2.contourf(x_grid/1000, z, U_Vel_xz.T, levels=30, cmap='bwr', norm=norm)
+    ax2.contour(x_grid/1000, z, U_Vel_xz.T, levels=15, colors='k', linewidths=0.5, alpha=0.3, norm=norm)
+
+    wave_depth = thermocline_depth
+    wave_y = wave_depth + wave_profile
+
+    ax2.plot(x_grid/1000, wave_y, 'k-', linewidth=3, label='Wave Profile', alpha=0.8)
+    ax2.fill_between(x_grid/1000, wave_depth, wave_y, alpha=0.3, color='yellow', label='Wave Displacement')
+
+    fig.colorbar(c2, ax=ax2, label='Horizontal Velocity (m/s)')
+    ax2.set_title(f"Horizontal Velocity + Wave Profile\nMax velocity at depth {max_vel_depth:.0f}m")
+    ax2.set_xlabel("Propagation Distance x (km)")
+    ax2.set_ylabel("Depth z (m)")
+    ax2.set_ylim(1000, 0)
+    ax2.legend(loc='upper right')
+    ax2.grid(True, alpha=0.3)
+
     plt.tight_layout()
     plt.show()
 
@@ -288,6 +333,7 @@ def load_data(data_dir):
     x_grid = np.load(os.path.join(data_dir, 'x_grid.npy'))
     y_grid = np.load(os.path.join(data_dir, 'y_grid.npy'))
     W_Vel_3D = np.load(os.path.join(data_dir, 'W_Vel_3D.npy'))
+    U_Vel_3D = np.load(os.path.join(data_dir, 'U_Vel_3D.npy'))
     T_3D = np.load(os.path.join(data_dir, 'T_3D.npy'))
     T_profile = np.load(os.path.join(data_dir, 'T_profile.npy'))
     rho_profile = np.load(os.path.join(data_dir, 'rho_profile.npy'))
@@ -303,6 +349,7 @@ def load_data(data_dir):
         'x_grid': x_grid,
         'y_grid': y_grid,
         'W_Vel_3D': W_Vel_3D,
+        'U_Vel_3D': U_Vel_3D,
         'T_3D': T_3D,
         'T': T_profile,
         'rho': rho_profile,
@@ -386,15 +433,23 @@ if __name__ == "__main__":
         y_center_idx = len(data['y_grid']) // 2
         plot_vertical_velocity_2d(
             data['x_grid'], data['z'], data['W_Vel_3D'], y_center_idx,
-            params.get('a_coef', 0), params.get('D', 0), params.get('h0', 0)
+            params.get('a_coef', 0), params.get('D', 0), params.get('h0', 0),
+            params.get('thermocline_depth', 150)
         )
-        
+
         print("生成垂直流速3D图...")
         plot_vertical_velocity_3d(
             data['x_grid'], data['y_grid'], data['z'], data['W_Vel_3D'], data['W'],
             params.get('a_coef', 0), params.get('h0', 0), params.get('D', 0)
         )
-        
+
+        print("生成水平流速二维图...")
+        plot_horizontal_velocity_2d(
+            data['x_grid'], data['z'], data['U_Vel_3D'], y_center_idx,
+            params.get('a_coef', 0), params.get('D', 0), params.get('h0', 0),
+            params.get('thermocline_depth', 150)
+        )
+
         print("所有图表生成完成！")
         
     except Exception as e:

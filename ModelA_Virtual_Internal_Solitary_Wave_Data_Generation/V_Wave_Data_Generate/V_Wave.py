@@ -14,13 +14,13 @@ from scipy.linalg import eig
 
 
 MODULE_DIR = Path(__file__).resolve().parents[1]
-DEFAULT_V_WAVE_DATA_DIR = MODULE_DIR / "V_Wave_Data"
+DEFAULT_V_WAVE_DATA_DIR = MODULE_DIR / "V_Wave_Data_Hor"
 
 
 # 数据保存工具
 
 def save_run_data(base_dir, z, T, rho, N2, W, U, c0,
-                  x_grid, y_grid, T_3D, W_Vel_3D,
+                  x_grid, y_grid, T_3D, W_Vel_3D, U_Vel_3D,
                   h0, Ly, a_coef, D,
                   extra_slices=None):
     """Save all relevant arrays and parameters for one simulation run.
@@ -50,6 +50,7 @@ def save_run_data(base_dir, z, T, rho, N2, W, U, c0,
     # save 3D fields
     np.save(os.path.join(run_dir, 'T_3D.npy'), T_3D)
     np.save(os.path.join(run_dir, 'W_Vel_3D.npy'), W_Vel_3D)
+    np.save(os.path.join(run_dir, 'U_Vel_3D.npy'), U_Vel_3D) # <--- 存成3D矩阵
 
     # save horizontal grids
     np.save(os.path.join(run_dir, 'x_grid.npy'), x_grid)
@@ -217,7 +218,14 @@ def generate_3d_curved_isw_block(z, W, U, c0, T):
     empirical_factor = 1
     Vertical_Velocity_3D = empirical_factor * ((2.0 * amplitude_h0 * C_nonlinear / D) * sech2_tanh_x * W_3d)
     
-    return x, y, Temperature_3D, Vertical_Velocity_3D, amplitude_h0, Ly, a_coef, D
+    # ====== 新增：生成真正的三维水平流速场 ======
+    U_3d = U.reshape(1, 1, len(z))
+    # 根据流函数推导: u = C * displacement_shape * U(z)
+    Horizontal_Velocity_3D = C_nonlinear * amplitude_h0 * sech2_x * U_3d
+    
+    return x, y, Temperature_3D, Vertical_Velocity_3D, Horizontal_Velocity_3D, amplitude_h0, Ly, a_coef, D
+
+    
 
 
 
@@ -248,7 +256,8 @@ def run_simulation(save=True):
 
     # 第三步：生成三维数据
     print("正在生成三维内孤立波数据...")
-    x_grid, y_grid, T_3D, W_Vel_3D, h0, Ly, a_coef, D = generate_3d_curved_isw_block(z, W, U, c0, T)
+    # 第三步：生成三维数据
+    x_grid, y_grid, T_3D, W_Vel_3D, U_Vel_3D, h0, Ly, a_coef, D = generate_3d_curved_isw_block(z, W, U, c0, T)
     print(f"成功生成带有曲率的大尺度三维内孤立波数据！")
     print(f"   随机生成的 Y 轴跨度为: {Ly/1000:.1f} km")
     print(f"   数据方块尺寸 (X, Y, Z): 10km × {Ly/1000:.1f}km × 1000m")
@@ -272,7 +281,7 @@ def run_simulation(save=True):
     if save:
         base_output = str(DEFAULT_V_WAVE_DATA_DIR)
         run_directory = save_run_data(base_output, z, T, rho, N2, W, U, c0,
-                                      x_grid, y_grid, T_3D, W_Vel_3D,
+                                      x_grid, y_grid, T_3D, W_Vel_3D, U_Vel_3D,
                                       h0, Ly, a_coef, D)
         save_xz_csv(xz_temp, x_grid, z, os.path.join(run_directory, 'xz_temp.csv'))
         save_xz_csv(xz_vel, x_grid, z, os.path.join(run_directory, 'xz_vel.csv'))

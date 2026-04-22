@@ -13,8 +13,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CSV = (
     PROJECT_ROOT
     / "ModelB_Simulated_Sampling_And_Amplitude_Fitting"
-    / "Analysis_Results_SwA_Lagrangian_Cut_Data"
-    / "analysis_results_swA_lagrangian_30cut.csv"#现在这里读的是30cut 可以改成0cut
+    / "Analysis_Results_SwA_Lagrangian_Hor_Cut_Data"
+    / "analysis_results_swA_lagrangian_hor_cut.csv"  # 现在这里读的是30cut 可以改成0cut
 )
 
 
