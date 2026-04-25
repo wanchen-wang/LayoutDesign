@@ -4,19 +4,17 @@ import os
 import sys
 from pathlib import Path
 
-# ensure current directory is on path so that we can import local modules
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
 from Single_W_A_Lagrangian_Hor import run_single
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data_Hor"
 
 
 def _annotate_point(ax, x, y, text, dx, dy, color='black', fontsize=8):
     """Annotate a point with readable boxed text and arrow."""
-    # Keep labels close to the point for better readability.
     dx = max(-24, min(24, dx))
     dy = max(-24, min(24, dy))
     ax.annotate(
@@ -29,32 +27,27 @@ def _annotate_point(ax, x, y, text, dx, dy, color='black', fontsize=8):
         bbox=dict(boxstyle='round,pad=0.25', fc='white', ec=color, alpha=0.85),
     )
 
+
 def plot_anatomy_fig3(t_array, w_obs, depth_obs, t_meet, thermocline_depth):
     """
     复刻 Anatomy Fig 3 绘图：垂直流速时序和滑翔机深度
     """
     fig, ax1 = plt.subplots(figsize=(10, 6))
 
-    # 右侧 Y 轴：绘制滑翔机深度 (红线)
     ax2 = ax1.twinx()
     ax2.plot(t_array, depth_obs, color='tomato', linewidth=1.5, label='Glider Depth')
-    ax2.set_ylim(1000, 0)  # 翻转深度轴
+    ax2.set_ylim(1000, 0)
     ax2.set_ylabel('Depth (m)', color='tomato', fontsize=12)
 
-    # 左侧 Y 轴：绘制垂直水速 (深蓝线)
-    # 取消了marker，使用纯净的实线展现完美的无噪声物理波形
     ax1.plot(t_array, w_obs, color='#005b96', linestyle='-', linewidth=2)
 
-    # 阴影填充：复刻 Anatomy 中下沉涂蓝、上升涂粉的效果
-    ax1.fill_between(t_array, 0, w_obs, where=(w_obs < 0), color='#6b9ac4', alpha=0.5) 
+    ax1.fill_between(t_array, 0, w_obs, where=(w_obs < 0), color='#6b9ac4', alpha=0.5)
     ax1.fill_between(t_array, 0, w_obs, where=(w_obs > 0), color='#f4a1c1', alpha=0.5)
 
-    # 标记 t_w0 零点和参考线
     ax1.axhline(0, color='gray', linestyle='--', linewidth=0.8)
     ax1.axvline(t_meet, color='black', linestyle=':', linewidth=1.5, alpha=0.6)
     ax1.text(t_meet + 20, max(w_obs)*0.8, f'Peak Encounter\nDepth: {thermocline_depth:.1f}m', color='black')
 
-    # 标注顶点与零线交点
     peak_idx = int(np.argmax(w_obs))
     trough_idx = int(np.argmin(w_obs))
 
@@ -113,7 +106,6 @@ def plot_anatomy_fig3(t_array, w_obs, depth_obs, t_meet, thermocline_depth):
     ax1.set_ylabel(r'$w_{isw}$ (m s$^{-1}$)', color='#005b96', fontsize=12)
     ax1.set_title('Underwater Glider Trajectory and Vertical Water Speed Sampling (Hor-Lagrangian)', fontsize=14)
 
-    # 动态调整左侧 Y 轴的上下限，使其对称美观
     w_max = max(abs(np.min(w_obs)), abs(np.max(w_obs))) * 1.2
     if w_max > 0:
         ax1.set_ylim(-w_max, w_max)
@@ -123,9 +115,6 @@ def plot_anatomy_fig3(t_array, w_obs, depth_obs, t_meet, thermocline_depth):
 
 
 def list_groups(base_dir=DEFAULT_V_WAVE_DATA_DIR):
-    """
-    列出所有可用的数据组（目录）
-    """
     if not os.path.isdir(base_dir):
         return []
     items = [d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))]
@@ -134,20 +123,42 @@ def list_groups(base_dir=DEFAULT_V_WAVE_DATA_DIR):
 
 
 if __name__ == "__main__":
-    groups = list_groups()
+    base_data_dir = DEFAULT_V_WAVE_DATA_DIR
+    if not os.path.isdir(base_data_dir):
+        print("没有可用的数据组，请先运行 v_wave 生成数据")
+        sys.exit(1)
+
+    groups = [d for d in os.listdir(base_data_dir) if os.path.isdir(os.path.join(base_data_dir, d))]
+    groups.sort()
     total = len(groups)
 
     if total == 0:
         print("没有可用的数据组，请先运行 v_wave 生成数据")
         sys.exit(1)
 
-    # 自动选择第一组数据进行演示
-    selected_group = groups[0]
-    path = os.path.join(DEFAULT_V_WAVE_DATA_DIR, selected_group)
-    print(f"正在分析并绘制数据组 (水平流-拉格朗日): {selected_group}")
+    print("可用的数据组：")
+    for i, group in enumerate(groups, 1):
+        print(f"{i}: {group}")
+
+    while True:
+        try:
+            choice = input(f"选择数据组 (1-{total}): ")
+            idx = int(choice) - 1
+            if 0 <= idx < total:
+                break
+            else:
+                print("无效选择，请重新输入")
+        except ValueError:
+            print("请输入有效的数字")
+
+    selected_group = groups[idx]
+    path = os.path.join(base_data_dir, selected_group)
+    print(f"正在分析数据组: {selected_group}")
 
     try:
-        result = run_single(path)
+        result = run_single(path, return_full=True)
+
+        print("\n绘制 Anatomy Fig3 (垂直流速时序和深度轨迹)...")
         plot_anatomy_fig3(
             result['t_array'],
             result['w_isw_array'],
@@ -155,5 +166,10 @@ if __name__ == "__main__":
             result['t_meet'],
             result['thermocline_depth']
         )
+
+        print(f"\n✅ 处理完成! 波高估计误差: {result['error_pct']:.2f}%")
+
     except Exception as e:
         print(f"处理失败: {e}")
+        import traceback
+        traceback.print_exc()

@@ -12,7 +12,7 @@ import Single_W_A_Lagrangian
 import Single_W_A_Lagrangian_Hor
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data_Hor"
 
 def plot_spatial_comparison(path):
     # 1. 直接调用原计算程序，获取两种情况的结果
@@ -20,7 +20,7 @@ def plot_spatial_comparison(path):
     res_std = Single_W_A_Lagrangian.run_single(path)
     
     print("\n[2/3] 正在运行包含了水平流的程序...")
-    res_hor = Single_W_A_Lagrangian_Hor.run_single(path)
+    res_hor = Single_W_A_Lagrangian_Hor.run_single(path, return_full=True)
     
     # 2. 提取时间序列和深度序列
     t_std, z_std, t_meet_std = res_std['t_array'], res_std['depth_obs'], res_std['t_meet']
@@ -34,18 +34,39 @@ def plot_spatial_comparison(path):
     x_std_raw = np.cumsum(v_g * dt_std)  # 仅考虑滑翔机自身动力
     
     # --- 轨迹 B：有水平流 (Hor-Lagrangian) ---
-    # 读取原始波形流速剖面
+    # 读取U_Vel_3D的y=0切片进行插值
     z_grid = np.load(os.path.join(path, 'z.npy'))
-    U_profile = np.load(os.path.join(path, 'U_profile.npy'))
-    if z_grid[0] > z_grid[-1]: # 修正倒序
-        z_grid = np.flip(z_grid)
-        U_profile = np.flip(U_profile)
-        
-    # 插值求出滑翔机所处深度的水平流速，并积分
-    u_bg_hor = np.interp(z_hor, z_grid, U_profile)
+    x_grid = np.load(os.path.join(path, 'x_grid.npy'))
+    y_grid = np.load(os.path.join(path, 'y_grid.npy'))
+    U_Vel_3D = np.load(os.path.join(path, 'U_Vel_3D.npy'))
+    U_Vel_3D = -U_Vel_3D
+    y_center_idx = np.argmin(np.abs(y_grid - 0.0))
+    U_Vel_xz = U_Vel_3D[:, y_center_idx, :]
+    from scipy.interpolate import RegularGridInterpolator
+    interp_u = RegularGridInterpolator((x_grid, z_grid), U_Vel_xz, bounds_error=False, fill_value=0.0)
+
+    # 逐步积分：每步用当前(x, z)插值u，再推进x
+    # 需要先读取物理参数获取波速 Cp
+    import json
+    with open(os.path.join(path, 'params.json'), 'r') as f:
+        params = json.load(f)
+    Cp = params.get('c0')
+
+    # 逐步积分：每步用当前(x, z)插值u，再推进x
     dt_hor = np.gradient(t_hor)
-    x_hor_raw = np.cumsum((v_g + u_bg_hor) * dt_hor)
+    x_hor_raw = np.zeros(len(t_hor))
     
+    for i in range(1, len(t_hor)):
+        # 【核心修复 1】：计算滑翔机相对于波浪核心的“有效坐标 x_eff”
+        # 它们在 t_meet_hor 时刻相遇 (此时相对距离为0)，相对速度为 v_g + Cp
+        x_eff = (v_g + Cp) * (t_hor[i-1] - t_meet_hor) 
+        
+        # 使用相对坐标去波浪矩阵中提取水平流速
+        u_i = float(interp_u((x_eff, z_hor[i-1])))
+        
+        # 【核心修复 2】：去掉多余的负号。前面已经翻转过 U_Vel_3D，直接做物理矢量叠加
+        x_hor_raw[i] = x_hor_raw[i-1] + (v_g + u_i) * dt_hor[i]
+
     # 4. 坐标系对齐：将相遇点 (Meet Point) 的水平位置设为原点 0，直观对比偏移量
     meet_idx_std = np.argmin(np.abs(t_std - t_meet_std))
     x_std = x_std_raw - x_std_raw[meet_idx_std]
@@ -114,7 +135,7 @@ if __name__ == "__main__":
         print("未找到数据文件夹。请确保路径与计算程序一致。")
         sys.exit(1)
         
-    selected_group = groups[155] # 这里可以修改为你想要测试的组号，或者添加交互式选择
+    selected_group = groups[55] # 这里可以修改为你想要测试的组号，或者添加交互式选择
     data_path = os.path.join(DEFAULT_V_WAVE_DATA_DIR, selected_group)
     print(f"[{selected_group}] 启动轨迹对比...")
     

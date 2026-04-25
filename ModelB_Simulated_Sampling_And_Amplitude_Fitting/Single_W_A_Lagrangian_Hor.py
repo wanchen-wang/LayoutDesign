@@ -8,20 +8,21 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
+DEFAULT_V_WAVE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data_Hor"
 DEFAULT_RESULTS_DIR = Path(__file__).resolve().parent / "Analysis_Results_SwA_Lagrangian_Hor_Cut_Data"
 
 
-def run_single(data_dir):
+def run_single(data_dir, return_full=False):
     """Execute a single virtual glider sampling using the data folder provided,
-    considering horizontal current (U_profile) in Lagrangian stepping.
+    considering horizontal current (U_Vel_3D y=0 slice) in Lagrangian stepping.
     """
     z = np.load(os.path.join(data_dir, 'z.npy'))
     x_grid = np.load(os.path.join(data_dir, 'x_grid.npy'))
     y_grid = np.load(os.path.join(data_dir, 'y_grid.npy'))
     W_Vel_3D = np.load(os.path.join(data_dir, 'W_Vel_3D.npy'))
+    U_Vel_3D = np.load(os.path.join(data_dir, 'U_Vel_3D.npy'))
+    U_Vel_3D = -U_Vel_3D
     W_profile = np.load(os.path.join(data_dir, 'W_profile.npy'))
-    U_profile = np.load(os.path.join(data_dir, 'U_profile.npy'))
 
     with open(os.path.join(data_dir, 'params.json'), 'r') as f:
         params = json.load(f)
@@ -35,17 +36,22 @@ def run_single(data_dir):
     if z[0] > z[-1]:
         z = np.flip(z)
         W_Vel_3D = np.flip(W_Vel_3D, axis=2)
+        U_Vel_3D = np.flip(U_Vel_3D, axis=2)
         W_profile = np.flip(W_profile)
-        U_profile = np.flip(U_profile)
-        
+
     interp_w = RegularGridInterpolator((x_grid, y_grid, z), W_Vel_3D,
+                                       bounds_error=False, fill_value=0.0)
+
+    y_center_idx = np.argmin(np.abs(y_grid - 0.0))
+    U_Vel_xz = U_Vel_3D[:, y_center_idx, :]
+    interp_u = RegularGridInterpolator((x_grid, z), U_Vel_xz,
                                        bounds_error=False, fill_value=0.0)
 
     # 提取滑翔机水平静水速度
     v_g = 0.22
 
     # 动态计算自适应时间窗口 (迎头相遇)
-    u_bg_meet = float(np.interp(thermocline_depth, z, U_profile))
+    u_bg_meet = float(interp_u((0.0, thermocline_depth)))
     V_rel = Cp + v_g + u_bg_meet  
 
     # 迎头相遇倒推初始位置
@@ -53,13 +59,18 @@ def run_single(data_dir):
     dt = 5.0  # 采样步长
     
     # 预积分：加入对水平流考虑，从 t=0 积分到 t_meet，获取相遇时的实际水平位移
+    # 预积分：加入对水平流考虑，从 t=0 积分到 t_meet，获取相遇时的实际水平位移
     x_g_meet_true = 0.0
     z_g_temp = 0.0
     t_temp_array = np.arange(0, t_meet, dt)
     for t_tmp in t_temp_array:
         t_mod = t_tmp % 12000
         w_stdy = -1000.0 / 6000.0 if t_mod < 6000 else 1000.0 / 6000.0
-        u_bg = float(np.interp(z_g_temp, z, U_profile))
+        
+        # ✅ 修复：估算当前时刻滑翔机与波浪核心的相对距离 x_eff_est
+        x_eff_est = (v_g + Cp) * (t_tmp - t_meet)
+        u_bg = float(interp_u((x_eff_est, z_g_temp)))
+        
         z_g_temp = z_g_temp - w_stdy * dt
         z_g_temp = np.clip(z_g_temp, 0.0, 1000.0)
         x_g_meet_true += (v_g + u_bg) * dt
@@ -87,14 +98,12 @@ def run_single(data_dir):
         t_mod = t % 12000
         w_stdy = -1000.0 / 6000.0 if t_mod < 6000 else 1000.0 / 6000.0
 
-        # 当前深度下的背景水平流速
-        u_bg = float(np.interp(z_g, z, U_profile))
-
-        # 计算波浪核心当前位置
+        # ✅ 修复：先计算波浪核心当前位置，以及相对距离 x_eff
         X_wave_current = x_init - Cp * t 
         x_eff = x_g - X_wave_current 
         
-        # 结合当前被水流推移过的真实深度 z_g，提取环境垂直流速
+        # ✅ 修复：统一使用相对距离 x_eff 提取水平和垂直流速
+        u_bg = float(interp_u((x_eff, z_g)))
         w_isw = interp_w((x_eff, y_center, z_g))
         
         # 物理速度叠加
@@ -156,7 +165,7 @@ def run_single(data_dir):
     duration = t_U - t_w0
     error_density = error_pct / duration if duration > 0 else 0.0
 
-    return {
+    result = {
         'wave_id': os.path.basename(data_dir),
         't_w0': t_w0,
         't_U': t_U,
@@ -167,18 +176,24 @@ def run_single(data_dir):
         'abs_error': error_abs,
         'error_pct': error_pct,
         'error_density': error_density,
-        't_array': t_array,
-        'w_isw_array': w_isw_array,
-        'w_obs_array': w_obs_array,
-        'depth_obs': depth_obs,
-        't_meet': t_meet,
-        'thermocline_depth': thermocline_depth
     }
+
+    if return_full:
+        result.update({
+            't_array': t_array,
+            'w_isw_array': w_isw_array,
+            'w_obs_array': w_obs_array,
+            'depth_obs': depth_obs,
+            't_meet': t_meet,
+            'thermocline_depth': thermocline_depth
+        })
+
+    return result
 
 
 if __name__ == "__main__":
     print(f"\n{'='*60}")
-    print(f"🚀 启动带水平流(U_profile)的拉格朗日仿真与误差结算...")
+    print(f"🚀 启动带水平流(U_Vel_3D y=0 slice)的拉格朗日仿真与误差结算...")
     print(f"{'='*60}")
 
     base_data_dir = DEFAULT_V_WAVE_DATA_DIR
@@ -195,6 +210,6 @@ if __name__ == "__main__":
     if results_list:
         df = pd.DataFrame(results_list)
         os.makedirs(DEFAULT_RESULTS_DIR, exist_ok=True)
-        output_filename = DEFAULT_RESULTS_DIR / "analysis_results_swA_lagrangian_hor_cut.csv"
+        output_filename = DEFAULT_RESULTS_DIR / "analysis_results_swA_lagrangian_hor_cut0.csv"
         df.to_csv(output_filename, index=False)
         print(f"\n✅ 成功保存: {output_filename} (包含 {len(df)} 组观测数据，平均误差: {df['error_pct'].mean():.2f}%)")
