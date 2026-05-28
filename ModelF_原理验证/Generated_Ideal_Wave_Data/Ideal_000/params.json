@@ -1,0 +1,10 @@
+{
+  "c0": 2.3989420136497457,
+  "h0": 140.0902469683514,
+  "Ly": 59344.7818582013,
+  "a_coef": 3.265830831025611e-06,
+  "D": 1460.9337161018495,
+  "thermocline_depth": 180.36072144288576,
+  "generator": "ModelF_ModelA_Process_With_Material_Layer_Velocity",
+  "velocity_coordinate": "original_material_layer_label"
+}

@@ -11,7 +11,7 @@ from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
 
 # 导入模块四底层评估函数
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation import process_30cut
+from Model3_Lagrange_Dynamic_Sampling_and_Error_Calculation import process_18cut
 
 # ==========================================================
 # 全局配置
@@ -20,14 +20,14 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MODULE_DIR = Path(__file__).resolve().parent
 
-ANALYSIS_DIR = MODULE_DIR / "Analysis_Bayesian_Opt_Model4_Data"
-HISTORY_CSV_PATH = os.path.join(ANALYSIS_DIR, "model4_try3.csv")
-SUMMARY_JSON_PATH = os.path.join(ANALYSIS_DIR, "model4_try3.json")
+ANALYSIS_DIR = MODULE_DIR / "Analysis_Bayesian_Opt_Model4_Hor_Data"
+HISTORY_CSV_PATH = os.path.join(ANALYSIS_DIR, "model4_HorMAE.csv")
+SUMMARY_JSON_PATH = os.path.join(ANALYSIS_DIR, "model4_HorMAE.json")
 
-BASE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data"
+BASE_DATA_DIR = PROJECT_ROOT / "ModelA_Virtual_Internal_Solitary_Wave_Data_Generation" / "V_Wave_Data_Hor"
 DATA_SPLIT_SEED = 42
 OPTIMIZER_SEED = 42
-TARGET_MAX_EVALS = 1
+TARGET_MAX_EVALS = 60
 
 TRAIN_SAMPLE_SIZE = 30
 TEST_SAMPLE_SIZE = 30
@@ -35,10 +35,10 @@ PENALTY_LOSS = 9999.0
 
 # W_C_THRESHOLD_CHOICES = [0.05, 0.10, 0.15, 0.20, 9999.0]
 # V_RATIO_CHOICES = [0.2, 0.4, 0.6, 0.8, 1.0]
-F_S_CHOICES = [0.2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.0]
+F_S_CHOICES = [0.2, 1, 2, 3, 4, 5]
 
-W_MAE = 0.7
-W_CI = 0.3
+W_MAE = 1
+W_CI = 0
 
 space = {
     "w_c_threshold": hp.uniform("w_c_threshold", 0.05, 0.5),
@@ -107,7 +107,7 @@ def _extract_error_value(result):
 def _run_one_dir(args):
     run_dir, w_c_threshold, v_target, zeta_target, f_s = args
     try:
-        result = process_30cut(w_c_threshold, v_target, zeta_target, f_s, run_dir)
+        result = process_18cut(w_c_threshold, v_target, zeta_target, f_s, run_dir)
         return _extract_error_value(result)
     except Exception:
         return PENALTY_LOSS

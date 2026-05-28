@@ -1,0 +1,9 @@
+{
+  "c0": 1.8410370784125276,
+  "h0": 99.19861888891212,
+  "Ly": 0.0,
+  "a_coef": 0.0,
+  "D": 1423.8221946655704,
+  "thermocline_depth": 500.0,
+  "generator": "ModelF_Ideal_Material_Layer"
+}

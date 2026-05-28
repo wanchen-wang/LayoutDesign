@@ -8,7 +8,7 @@ from pathlib import Path
 RESULTS_DIR = (
     Path(__file__).resolve().parents[1]
     / "ModelB_Simulated_Sampling_And_Amplitude_Fitting"
-    / "Analysis_Results_SwA_Lagrangian_Cut_Data"
+    / "Analysis_Results_SwA_Lagrangian_Hor_Cut_Data"
 )
 
 
@@ -73,7 +73,7 @@ def analyze_truncation_sensitivity(data_dir, max_pct=40):
 
     # 1. 遍历读取指定路径下 0 到 40 的所有 CSV 文件
     for pct in range(max_pct + 1):
-        file_name = f'analysis_results_swA_lagrangian_{pct}cut.csv'
+        file_name = f'analysis_results_swA_lagrangian_hor_cut{pct}.csv'
         file_path = os.path.join(data_dir, file_name)
         
         if not os.path.exists(file_path):

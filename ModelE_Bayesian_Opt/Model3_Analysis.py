@@ -4,7 +4,7 @@ from scipy import stats
 from pathlib import Path
 # 读取 Model4 优化参数的 loss 数据，分析相对误差的统计特性，特别是前100条数据的随机抽样分析
 MODULE_DIR = Path(__file__).resolve().parent
-DATA_DIR = MODULE_DIR / "Analysis_Bayesian_Opt_Model3_Data"
+DATA_DIR = MODULE_DIR / "Analysis_Bayesian_Opt_Model3_Hor_Data"
 
 
 def _select_csv_file(csv_paths):
